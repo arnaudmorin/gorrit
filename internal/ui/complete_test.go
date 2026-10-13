@@ -85,3 +85,19 @@ func TestCompleterLive(t *testing.T) {
 		os.WriteFile(filepath.Join(dir, "complete.ansi"), []byte(m.View()), 0o644)
 	}
 }
+
+func TestAccountCompletionPicksIdentifier(t *testing.T) {
+	a := gerrit.AccountInfo{Name: "Pierre Libeau", Email: "pierre.libeau@example.com", Username: "plibeau"}
+	if got := accountCompletion("author", a); got != "pierre.libeau@example.com" {
+		t.Fatalf("author: %q", got)
+	}
+	if got := accountCompletion("committer", a); got != "pierre.libeau@example.com" {
+		t.Fatalf("committer: %q", got)
+	}
+	if got := accountCompletion("owner", a); got != "plibeau" {
+		t.Fatalf("owner: %q", got)
+	}
+	if got := accountCompletion("owner", gerrit.AccountInfo{Email: "x@y"}); got != "x@y" {
+		t.Fatalf("fallback: %q", got)
+	}
+}

@@ -105,7 +105,7 @@ func (c *completer) complete(client *gerrit.Client, input string) (string, tea.C
 		}
 		c.pending = word
 		c.base = base
-		return input, fetchCompletions(client, base, word, prefix+op+":", value, projectOperators[op])
+		return input, fetchCompletions(client, base, word, prefix+op+":", op, value, projectOperators[op])
 	}
 	if len(c.candidates) == 0 {
 		c.reset()
@@ -115,7 +115,23 @@ func (c *completer) complete(client *gerrit.Client, input string) (string, tea.C
 	return c.current(), nil
 }
 
-func fetchCompletions(client *gerrit.Client, base, word, opPrefix, value string, project bool) tea.Cmd {
+// accountCompletion picks the identifier that works with the operator:
+// author: and committer: match the git author by name or email, not the
+// Gerrit account, while the others accept a username.
+func accountCompletion(op string, a gerrit.AccountInfo) string {
+	gitOperator := op == "author" || op == "committer"
+	switch {
+	case gitOperator && a.Email != "":
+		return a.Email
+	case !gitOperator && a.Username != "":
+		return a.Username
+	case a.Email != "":
+		return a.Email
+	}
+	return ""
+}
+
+func fetchCompletions(client *gerrit.Client, base, word, opPrefix, op, value string, project bool) tea.Cmd {
 	return func() tea.Msg {
 		var out []string
 		if project {
@@ -132,11 +148,8 @@ func fetchCompletions(client *gerrit.Client, base, word, opPrefix, value string,
 				return completionsMsg{base: base, word: word}
 			}
 			for _, a := range accounts {
-				switch {
-				case a.Username != "":
-					out = append(out, opPrefix+a.Username)
-				case a.Email != "":
-					out = append(out, opPrefix+a.Email)
+				if id := accountCompletion(op, a); id != "" {
+					out = append(out, opPrefix+id)
 				}
 			}
 			sort.Strings(out)
