@@ -61,7 +61,7 @@ are hidden behind `t`.
 | `x` | reply "Done" and resolve |
 | `m` | post a message on the change |
 | `v` | vote |
-| `D` | download commands (checkout, cherry-pick, …) |
+| `D` | download commands: checkout, cherry-pick, … (`y` copies, `enter` runs it here, then `s` drops into a shell) |
 | `b` | open the referenced bug |
 | `esc` | back |
 

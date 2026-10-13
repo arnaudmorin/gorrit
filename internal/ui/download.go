@@ -16,6 +16,7 @@ import (
 var commandOrder = []string{"Checkout", "Cherry Pick", "Cherry-Pick", "Format Patch", "Format-Patch", "Pull", "Branch", "Reset"}
 
 type downloadModel struct {
+	exec    func(*exec.Cmd, tea.ExecCallback) tea.Cmd // tea.ExecProcess, replaceable in tests
 	open    bool
 	schemes []string
 	scheme  int
@@ -25,7 +26,7 @@ type downloadModel struct {
 }
 
 func newDownload(fetch map[string]gerrit.FetchInfo) downloadModel {
-	d := downloadModel{open: true, fetch: fetch}
+	d := downloadModel{open: true, fetch: fetch, exec: tea.ExecProcess}
 	for scheme := range fetch {
 		d.schemes = append(d.schemes, scheme)
 	}
@@ -116,9 +117,13 @@ func (d downloadModel) Update(msg tea.KeyMsg) (downloadModel, tea.Cmd) {
 			return d, nil
 		}
 		d.open = false
-		script := fmt.Sprintf("echo '$ %s'; %s; echo; read -p 'Press enter to return to gorrit' _", strings.ReplaceAll(command, "'", `'"'"'`), command)
+		script := fmt.Sprintf(`echo '$ %s'; %s; echo
+printf 'Press enter to return to gorrit, or s for a shell here: '
+read -r answer
+if [ "$answer" = s ]; then exec "${SHELL:-sh}"; fi
+`, strings.ReplaceAll(command, "'", `'"'"'`), command)
 		cmd := exec.Command("sh", "-c", script)
-		return d, tea.ExecProcess(cmd, func(err error) tea.Msg {
+		return d, d.exec(cmd, func(err error) tea.Msg {
 			if err != nil {
 				return downloadDoneMsg{notice: styleError.Render(name + " failed: " + err.Error() + " ")}
 			}
