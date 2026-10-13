@@ -77,3 +77,30 @@ func TestDiffAnchorsAndNewComment(t *testing.T) {
 		os.WriteFile(filepath.Join(dir, "newcomment.ansi"), []byte(strings.TrimRight(view, "\n")), 0o644)
 	}
 }
+
+func TestDiffPagingMovesCursor(t *testing.T) {
+	var lines []string
+	lines = append(lines, "diff --git a/f.py b/f.py", "--- a/f.py", "+++ b/f.py", "@@ -1,60 +1,60 @@")
+	for i := 0; i < 60; i++ {
+		lines = append(lines, " line")
+	}
+	m := newDetail(gerrit.New("https://example.org", "", ""), "", nil)
+	m.change = &gerrit.ChangeInfo{CurrentRevisionNumber: 1}
+	m.width, m.height = 100, 22
+	m.layout()
+	m.files = parsePatch([]byte(strings.Join(lines, "\n") + "\n"))
+	m.hasPatch = true
+	m.showPage(pageDiff)
+	start := m.diffLines[m.diffPos]
+	m.moveLineBy(m.viewport.Height)
+	if got := m.diffLines[m.diffPos] - start; got < m.viewport.Height-2 || got > m.viewport.Height+2 {
+		t.Fatalf("cursor moved %d lines for a page of %d", got, m.viewport.Height)
+	}
+	if m.viewport.YOffset == 0 {
+		t.Fatal("view did not follow the cursor")
+	}
+	m.moveLineBy(-500)
+	if m.diffPos != 0 || m.viewport.YOffset != 0 {
+		t.Fatalf("expected top, got pos %d offset %d", m.diffPos, m.viewport.YOffset)
+	}
+}

@@ -245,6 +245,26 @@ func (m *detailModel) moveLine(step int) {
 	}
 }
 
+// moveLineBy moves the diff cursor to the commentable line nearest to the
+// current one plus delta content lines, used for paging.
+func (m *detailModel) moveLineBy(delta int) {
+	if len(m.diffLines) == 0 {
+		return
+	}
+	target := m.diffLines[m.diffPos] + delta
+	pos := m.diffPos
+	if delta > 0 {
+		for pos < len(m.diffLines)-1 && m.diffLines[pos] < target {
+			pos++
+		}
+	} else {
+		for pos > 0 && m.diffLines[pos] > target {
+			pos--
+		}
+	}
+	m.moveLine(pos - m.diffPos)
+}
+
 func (m detailModel) cursorAnchor() *lineAnchor {
 	if m.page != pageDiff || m.diffPos < 0 || m.diffPos >= len(m.diffLines) {
 		return nil
@@ -389,6 +409,26 @@ func (m detailModel) updateKey(msg tea.KeyMsg) (detailModel, tea.Cmd) {
 	case "k", "up":
 		if m.page == pageDiff {
 			m.moveLine(-1)
+			return m, nil
+		}
+	case "pgdown", "ctrl+f":
+		if m.page == pageDiff {
+			m.moveLineBy(m.viewport.Height)
+			return m, nil
+		}
+	case "pgup", "ctrl+b":
+		if m.page == pageDiff {
+			m.moveLineBy(-m.viewport.Height)
+			return m, nil
+		}
+	case "ctrl+d":
+		if m.page == pageDiff {
+			m.moveLineBy(m.viewport.Height / 2)
+			return m, nil
+		}
+	case "ctrl+u":
+		if m.page == pageDiff {
+			m.moveLineBy(-m.viewport.Height / 2)
 			return m, nil
 		}
 	case "c":
