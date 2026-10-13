@@ -140,22 +140,29 @@ func (d downloadModel) Update(msg tea.KeyMsg) (downloadModel, tea.Cmd) {
 	return d, nil
 }
 
-// run executes a download command in dir (or the current directory), then
-// waits for a key: any returns to gorrit, s opens a shell there first.
+// run executes a download command. In the current directory it then waits
+// for a key: any returns to gorrit, s opens a shell there first. In a
+// temporary repo it opens the shell straight away and the repo is deleted
+// when that shell exits.
 func (d downloadModel) run(name, command, dir string, cleanup func()) tea.Cmd {
-	note := ""
+	quoted := strings.ReplaceAll(command, "'", `'"'"'`)
+	var script string
 	if dir != "" {
-		note = " (temporary repo, deleted on return)"
-	}
-	script := fmt.Sprintf(`echo '$ %s'; %s; echo
-printf 'Press any key to return to gorrit, or s for a shell here%s: '
+		script = fmt.Sprintf(`echo '$ %s'; %s || exit
+echo; echo 'Temporary repo in '"$PWD"', deleted when this shell exits.'
+exec "${SHELL:-sh}"
+`, quoted, command)
+	} else {
+		script = fmt.Sprintf(`echo '$ %s'; %s; echo
+printf 'Press any key to return to gorrit, or s for a shell here: '
 if [ -t 0 ]; then
   saved=$(stty -g); stty raw -echo; answer=$(dd bs=1 count=1 2>/dev/null); stty "$saved"; echo
 else
   read -r answer
 fi
 if [ "$answer" = s ]; then exec "${SHELL:-sh}"; fi
-`, strings.ReplaceAll(command, "'", `'"'"'`), command, note)
+`, quoted, command)
+	}
 	cmd := exec.Command("sh", "-c", script)
 	cmd.Dir = dir
 	return d.exec(cmd, func(err error) tea.Msg {
@@ -198,6 +205,6 @@ func (d downloadModel) View(width int) string {
 			b.WriteString("    " + styleText.Render(line) + "\n")
 		}
 	}
-	b.WriteString("\n" + styleMuted.Render("j/k select · s scheme · y copy · enter run here · t run in a temp repo · esc close"))
+	b.WriteString("\n" + styleMuted.Render("j/k select · s scheme · y copy · enter run here · t shell in a temp repo · esc close"))
 	return styleBox.Width(inner + 4).Render(strings.TrimRight(b.String(), "\n"))
 }

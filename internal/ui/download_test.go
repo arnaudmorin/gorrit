@@ -60,6 +60,9 @@ func TestDownloadTempRepo(t *testing.T) {
 	if !strings.Contains(script, "git init -q && git fetch --depth 2 https://example.invalid/p") {
 		t.Fatalf("script: %s", script)
 	}
+	if !strings.Contains(script, `exec "${SHELL:-sh}"`) || strings.Contains(script, "Press any key") {
+		t.Fatalf("temp repo must open a shell directly: %s", script)
+	}
 	if !strings.HasPrefix(captured.Dir, os.TempDir()) {
 		t.Fatalf("dir %q not temporary", captured.Dir)
 	}
