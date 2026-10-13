@@ -15,7 +15,7 @@ import (
 type view int
 
 const (
-	viewDashboard view = iota
+	viewList view = iota
 	viewDetail
 )
 
@@ -28,7 +28,7 @@ type Model struct {
 	client      *gerrit.Client
 	diffCommand string
 	view        view
-	dashboard   dashboardModel
+	list        listModel
 	detail      detailModel
 }
 
@@ -43,13 +43,13 @@ func New(client *gerrit.Client, opts Options) Model {
 	return Model{
 		client:      client,
 		diffCommand: opts.DiffCommand,
-		dashboard:   newDashboard(client, opts.Filters),
+		list:        newList(client, opts.Filters),
 		detail:      newDetail(client, opts.BugURL, opts.Bots),
 	}
 }
 
 func (m Model) Init() tea.Cmd {
-	cmds := []tea.Cmd{m.dashboard.refresh()}
+	cmds := []tea.Cmd{m.list.refresh()}
 	if m.client.Authenticated() {
 		client := m.client
 		cmds = append(cmds, func() tea.Msg {
@@ -67,7 +67,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.dashboard.width, m.dashboard.height = msg.Width, msg.Height
+		m.list.width, m.list.height = msg.Width, msg.Height
 		m.detail.resize(msg.Width, msg.Height)
 		return m, nil
 	case tea.KeyMsg:
@@ -75,13 +75,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c":
 			return m, tea.Quit
 		case "q":
-			if m.view == viewDashboard && !m.dashboard.searching {
+			if m.view == viewList && !m.list.searching {
 				return m, tea.Quit
 			}
 		}
 	case selfLoadedMsg:
 		if msg.err == nil && msg.account != nil {
-			m.dashboard.selfID = msg.account.AccountID
+			m.list.selfID = msg.account.AccountID
 			m.detail.selfID = msg.account.AccountID
 		}
 		return m, nil
@@ -89,10 +89,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.view = viewDetail
 		return m, m.detail.open(msg.id)
 	case closeDetailMsg:
-		m.view = viewDashboard
+		m.view = viewList
 		return m, nil
 	case starDoneMsg:
-		m.dashboard, cmd = m.dashboard.Update(msg)
+		m.list, cmd = m.list.Update(msg)
 		m.detail, _ = m.detail.Update(msg)
 		return m, cmd
 	case openDiffMsg:
@@ -115,8 +115,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.setNotice(styleError.Render(fmt.Sprintf("diff viewer exited with %d ", exit.ExitCode())))
 		}
 		return m, nil
-	case dashboardLoadedMsg, moreLoadedMsg, completionsMsg:
-		m.dashboard, cmd = m.dashboard.Update(msg)
+	case listLoadedMsg, moreLoadedMsg, completionsMsg:
+		m.list, cmd = m.list.Update(msg)
 		return m, cmd
 	case detailLoadedMsg, patchLoadedMsg, replySentMsg, downloadDoneMsg, voteSubmitMsg:
 		m.detail, cmd = m.detail.Update(msg)
@@ -124,8 +124,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch m.view {
-	case viewDashboard:
-		m.dashboard, cmd = m.dashboard.Update(msg)
+	case viewList:
+		m.list, cmd = m.list.Update(msg)
 	case viewDetail:
 		m.detail, cmd = m.detail.Update(msg)
 	}
@@ -133,7 +133,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) setNotice(s string) {
-	m.dashboard.notice = s
+	m.list.notice = s
 	m.detail.notice = s
 }
 
@@ -141,7 +141,7 @@ func (m Model) View() string {
 	if m.view == viewDetail {
 		return m.detail.View()
 	}
-	return m.dashboard.View()
+	return m.list.View()
 }
 
 func openBrowser(url string) tea.Cmd {

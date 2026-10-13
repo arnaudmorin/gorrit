@@ -23,22 +23,22 @@ func TestSnapshot(t *testing.T) {
 	lipgloss.SetColorProfile(termenv.TrueColor)
 	client := gerrit.New(url, os.Getenv("GORRIT_USERNAME"), os.Getenv("GORRIT_TOKEN"))
 	app := New(client, Options{Filters: append(config.AnonymousFilters, config.Filter{Name: "Nova", Query: "project:openstack/nova"}), BugURL: config.DefaultBugURL})
-	app.dashboard.width, app.dashboard.height = 150, 36
+	app.list.width, app.list.height = 150, 36
 	app.detail.resize(150, 36)
 
-	msg := app.dashboard.refresh()()
-	if m := msg.(dashboardLoadedMsg); m.err != nil {
+	msg := app.list.refresh()()
+	if m := msg.(listLoadedMsg); m.err != nil {
 		t.Fatal(m.err)
 	}
-	app.dashboard, _ = app.dashboard.Update(msg)
-	app.dashboard.cursor = 2
-	app.dashboard.status = statusAll
-	if sel := app.dashboard.selected(); sel != nil {
-		app.dashboard.selfID = sel.Owner.AccountID
+	app.list, _ = app.list.Update(msg)
+	app.list.cursor = 2
+	app.list.status = statusAll
+	if sel := app.list.selected(); sel != nil {
+		app.list.selfID = sel.Owner.AccountID
 	}
-	write(t, filepath.Join(dir, "dashboard.ansi"), app.dashboard.View())
+	write(t, filepath.Join(dir, "list.ansi"), app.list.View())
 
-	sel := app.dashboard.selected()
+	sel := app.list.selected()
 	change, err := client.GetChangeDetail(context.Background(), gerrit.ChangeID(sel.Project, sel.Number), detailOptions...)
 	if err != nil {
 		t.Fatal(err)

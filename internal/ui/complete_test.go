@@ -76,7 +76,7 @@ func TestCompleterLive(t *testing.T) {
 
 	if dir := os.Getenv("GORRIT_SNAPSHOT_DIR"); dir != "" {
 		lipgloss.SetColorProfile(termenv.TrueColor)
-		m := newDashboard(client, config.AnonymousFilters)
+		m := newList(client, config.AnonymousFilters)
 		m.width, m.height = 140, 8
 		m.searching = true
 		m.search.Focus()

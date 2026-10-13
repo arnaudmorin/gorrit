@@ -16,17 +16,17 @@ func TestRenderAgainstLiveServer(t *testing.T) {
 	}
 	client := gerrit.New(url, os.Getenv("GORRIT_USERNAME"), os.Getenv("GORRIT_TOKEN"))
 
-	dash := newDashboard(client, config.AnonymousFilters)
-	dash.width, dash.height = 160, 30
-	msg := dash.refresh()()
-	loaded := msg.(dashboardLoadedMsg)
+	list := newList(client, config.AnonymousFilters)
+	list.width, list.height = 160, 30
+	msg := list.refresh()()
+	loaded := msg.(listLoadedMsg)
 	if loaded.err != nil {
 		t.Fatal(loaded.err)
 	}
-	dash, _ = dash.Update(loaded)
-	t.Log("\n" + dash.View())
+	list, _ = list.Update(loaded)
+	t.Log("\n" + list.View())
 
-	sel := dash.selected()
+	sel := list.selected()
 	if sel == nil {
 		t.Fatal("no change selected")
 	}

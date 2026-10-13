@@ -71,7 +71,7 @@ type Messages struct {
 	Bots []string `toml:"bots"`
 }
 
-// Filter is a named change query shown as a dashboard tab.
+// Filter is a named change query shown as a tab of the change list.
 type Filter struct {
 	Name  string `toml:"name"`
 	Query string `toml:"query"`

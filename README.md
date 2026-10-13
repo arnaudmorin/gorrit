@@ -5,7 +5,7 @@ built on the Gerrit REST API. Browse changes, read diffs and comments, reply,
 vote, and hand patches to your favourite diff viewer, without leaving the
 terminal.
 
-![Change list](docs/dashboard.png)
+![Change list](docs/list.png)
 
 ## Install
 

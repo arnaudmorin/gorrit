@@ -14,9 +14,9 @@ import (
 	"github.com/arnaudmorin/gorrit/internal/gerrit"
 )
 
-var dashboardQueryOptions = []string{"LABELS", "DETAILED_ACCOUNTS", "SUBMITTABLE", "STAR"}
+var listQueryOptions = []string{"LABELS", "DETAILED_ACCOUNTS", "SUBMITTABLE", "STAR"}
 
-var dashboardLabels = []string{"Code-Review", "Verified", "Workflow"}
+var listLabels = []string{"Code-Review", "Verified", "Workflow"}
 
 const pageLimit = 50
 
@@ -63,9 +63,9 @@ func (f statusFilter) apply(query string) string {
 	return query
 }
 
-// dashboardLoadedMsg carries the first page of a query, moreLoadedMsg the
+// listLoadedMsg carries the first page of a query, moreLoadedMsg the
 // following ones. Both name their query so stale answers can be ignored.
-type dashboardLoadedMsg struct {
+type listLoadedMsg struct {
 	query   string
 	changes []gerrit.ChangeInfo
 	err     error
@@ -92,7 +92,7 @@ func toggleStar(client *gerrit.Client, id string, starred bool) tea.Cmd {
 	}
 }
 
-type dashboardModel struct {
+type listModel struct {
 	client      *gerrit.Client
 	selfID      int
 	filters     []config.Filter
@@ -115,7 +115,7 @@ type dashboardModel struct {
 	complete  completer
 }
 
-func newDashboard(client *gerrit.Client, filters []config.Filter) dashboardModel {
+func newList(client *gerrit.Client, filters []config.Filter) listModel {
 	ti := textinput.New()
 	ti.Placeholder = "status:open project:foo ..."
 	ti.Prompt = "/ "
@@ -125,56 +125,56 @@ func newDashboard(client *gerrit.Client, filters []config.Filter) dashboardModel
 			filters = config.DefaultFilters
 		}
 	}
-	m := dashboardModel{client: client, filters: filters, loading: true, search: ti}
+	m := listModel{client: client, filters: filters, loading: true, search: ti}
 	m.applyTab(0)
 	return m
 }
 
-// applyTab points the dashboard at a filter tab without loading it.
-func (m *dashboardModel) applyTab(tab int) {
+// applyTab points the list at a filter tab without loading it.
+func (m *listModel) applyTab(tab int) {
 	m.tab = tab
 	m.status = statusOpen
 	m.title = m.filters[tab].Name
 	m.query = m.filters[tab].Query
 }
 
-func (m *dashboardModel) showTab(tab int) tea.Cmd {
+func (m *listModel) showTab(tab int) tea.Cmd {
 	m.applyTab(tab)
 	return m.reload()
 }
 
 // reload fetches the current query from the top.
-func (m *dashboardModel) reload() tea.Cmd {
+func (m *listModel) reload() tea.Cmd {
 	m.cursor = 0
 	m.offset = 0
 	return m.refresh()
 }
 
 // refresh fetches the current query again, keeping the cursor where it is.
-func (m *dashboardModel) refresh() tea.Cmd {
+func (m *listModel) refresh() tea.Cmd {
 	m.err = nil
 	m.loading = true
 	client, query := m.client, m.fullQuery()
 	return func() tea.Msg {
 		changes, err := client.QueryChanges(context.Background(), query, gerrit.QueryOptions{
 			Limit:   pageLimit,
-			Options: dashboardQueryOptions,
+			Options: listQueryOptions,
 		})
-		return dashboardLoadedMsg{query: query, changes: changes, err: err}
+		return listLoadedMsg{query: query, changes: changes, err: err}
 	}
 }
 
-func (m dashboardModel) fullQuery() string {
+func (m listModel) fullQuery() string {
 	return m.status.apply(m.query)
 }
 
-func (m dashboardModel) hasMore() bool {
+func (m listModel) hasMore() bool {
 	n := len(m.changes)
 	return n > 0 && m.changes[n-1].MoreChanges
 }
 
 // loadMore fetches the next page when Gerrit said there is one.
-func (m *dashboardModel) loadMore() tea.Cmd {
+func (m *listModel) loadMore() tea.Cmd {
 	if m.loadingMore || !m.hasMore() {
 		return nil
 	}
@@ -184,13 +184,13 @@ func (m *dashboardModel) loadMore() tea.Cmd {
 		changes, err := client.QueryChanges(context.Background(), query, gerrit.QueryOptions{
 			Limit:   pageLimit,
 			Start:   start,
-			Options: dashboardQueryOptions,
+			Options: listQueryOptions,
 		})
 		return moreLoadedMsg{query: query, changes: changes, err: err}
 	}
 }
 
-func (m dashboardModel) bodyHeight() int {
+func (m listModel) bodyHeight() int {
 	h := m.height - 3
 	if m.err != nil {
 		h--
@@ -200,7 +200,7 @@ func (m dashboardModel) bodyHeight() int {
 
 // adjustScroll moves the viewport only as far as needed to keep the cursor
 // visible, keeping a couple of lines of context above it.
-func (m *dashboardModel) adjustScroll() {
+func (m *listModel) adjustScroll() {
 	lines, cursorLine := m.renderRows()
 	h := m.bodyHeight()
 	switch {
@@ -212,26 +212,26 @@ func (m *dashboardModel) adjustScroll() {
 	m.offset = min(m.offset, max(len(lines)-h, 0))
 }
 
-func (m *dashboardModel) clampCursor() {
+func (m *listModel) clampCursor() {
 	m.cursor = min(max(m.cursor, 0), max(len(m.changes)-1, 0))
 }
 
-func (m dashboardModel) selected() *gerrit.ChangeInfo {
+func (m listModel) selected() *gerrit.ChangeInfo {
 	if len(m.changes) == 0 {
 		return nil
 	}
 	return &m.changes[m.cursor]
 }
 
-func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
+func (m listModel) Update(msg tea.Msg) (listModel, tea.Cmd) {
 	m, cmd := m.update(msg)
 	m.adjustScroll()
 	return m, cmd
 }
 
-func (m dashboardModel) update(msg tea.Msg) (dashboardModel, tea.Cmd) {
+func (m listModel) update(msg tea.Msg) (listModel, tea.Cmd) {
 	switch msg := msg.(type) {
-	case dashboardLoadedMsg:
+	case listLoadedMsg:
 		if msg.query != m.fullQuery() {
 			return m, nil
 		}
@@ -285,7 +285,7 @@ func (m dashboardModel) update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 	return m, nil
 }
 
-func (m dashboardModel) updateKey(msg tea.KeyMsg) (dashboardModel, tea.Cmd) {
+func (m listModel) updateKey(msg tea.KeyMsg) (listModel, tea.Cmd) {
 	switch msg.String() {
 	case "j", "down":
 		if m.cursor >= len(m.changes)-1 {
@@ -352,7 +352,7 @@ func (m dashboardModel) updateKey(msg tea.KeyMsg) (dashboardModel, tea.Cmd) {
 	return m, nil
 }
 
-func (m dashboardModel) updateSearch(msg tea.KeyMsg) (dashboardModel, tea.Cmd) {
+func (m listModel) updateSearch(msg tea.KeyMsg) (listModel, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
 		if m.complete.active() {
@@ -387,7 +387,7 @@ func (m dashboardModel) updateSearch(msg tea.KeyMsg) (dashboardModel, tea.Cmd) {
 	return m, cmd
 }
 
-func (m dashboardModel) View() string {
+func (m listModel) View() string {
 	var b strings.Builder
 	left := styleLogo.Render("gorrit") + styleBar.Render(" ") + styleBarMuted.Render(m.client.BaseURL())
 	right := m.notice
@@ -428,7 +428,7 @@ func (m dashboardModel) View() string {
 }
 
 // tabsView renders the filter tabs with the active one highlighted.
-func (m dashboardModel) tabsView() string {
+func (m listModel) tabsView() string {
 	var parts []string
 	for i, f := range m.filters[:min(len(m.filters), 9)] {
 		label := fmt.Sprintf(" %d %s ", i+1, f.Name)
@@ -451,7 +451,7 @@ func (m dashboardModel) tabsView() string {
 }
 
 // renderRows renders the change table and reports the line holding the cursor.
-func (m dashboardModel) renderRows() ([]string, int) {
+func (m listModel) renderRows() ([]string, int) {
 	const (
 		wNum    = 8
 		wFlags  = 2
@@ -463,7 +463,7 @@ func (m dashboardModel) renderRows() ([]string, int) {
 		wAge    = 4
 		gutter  = 2
 	)
-	labelWidth := len(dashboardLabels) * (wVote + 1)
+	labelWidth := len(listLabels) * (wVote + 1)
 	wSubject := max(m.width-gutter-wNum-wFlags-wOwner-wProj-wBranch-labelWidth-wStat-wAge-8, 20)
 
 	lines := []string{rule(fmt.Sprintf("%s (%d)", m.title, len(m.changes)), m.width)}
@@ -474,7 +474,7 @@ func (m dashboardModel) renderRows() ([]string, int) {
 
 	header := strings.Repeat(" ", gutter) + padLeft("#", wNum) + " " + pad("", wFlags) + " " + pad("SUBJECT", wSubject) + " " +
 		pad("OWNER", wOwner) + " " + pad("PROJECT", wProj) + " " + pad("BRANCH", wBranch) + " "
-	for _, l := range dashboardLabels {
+	for _, l := range listLabels {
 		header += padLeft(labelAbbrev(l), wVote) + " "
 	}
 	header += pad("SIZE", wStat) + " " + padLeft("AGE", wAge)
@@ -516,7 +516,7 @@ func (m dashboardModel) renderRows() ([]string, int) {
 		branch := st(styleMuted).Render(pad(c.Branch, wBranch))
 
 		line := number + sp + flag + sp + subject + sp + owner + sp + project + sp + branch + sp
-		for _, l := range dashboardLabels {
+		for _, l := range listLabels {
 			if info, ok := c.Labels[l]; ok {
 				line += voteCell(info, wVote, selected) + sp
 			} else {
