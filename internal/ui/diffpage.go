@@ -10,26 +10,20 @@ import (
 	"github.com/arnaudmorin/gorrit/internal/gerrit"
 )
 
-type anchor struct {
+// lineAnchor is a comment position: a line of a file on one side of the diff.
+type lineAnchor struct {
 	path string
-	side string
-	line int
+	side string // REVISION or PARENT
+	line int    // 0 for a file-level comment
 }
 
-func threadAnchor(t thread) anchor {
+func threadAnchor(t thread) lineAnchor {
 	root := t.root()
 	side := root.Side
 	if side == "" {
 		side = "REVISION"
 	}
-	return anchor{path: t.path, side: side, line: root.Line}
-}
-
-// lineAnchor says where a new comment on a rendered content line would go.
-type lineAnchor struct {
-	path string
-	side string // REVISION or PARENT
-	line int    // 0 for a file-level comment
+	return lineAnchor{path: t.path, side: side, line: root.Line}
 }
 
 func (a lineAnchor) String() string {
@@ -60,7 +54,7 @@ func renderDiff(files []diffFile, ts []thread, change *gerrit.ChangeInfo, width,
 		out.anchors[w.lines] = a
 		out.lines = append(out.lines, w.lines)
 	}
-	byAnchor := map[anchor][]int{}
+	byAnchor := map[lineAnchor][]int{}
 	byPath := map[string][]int{}
 	placed := map[int]bool{}
 	for i, t := range ts {
@@ -158,10 +152,10 @@ func renderDiff(files []diffFile, ts []thread, change *gerrit.ChangeInfo, width,
 			}
 			w.writeln(line)
 			if l.new > 0 {
-				emit(byAnchor[anchor{f.path, "REVISION", l.new}])
+				emit(byAnchor[lineAnchor{f.path, "REVISION", l.new}])
 			}
 			if l.old > 0 {
-				emit(byAnchor[anchor{f.path, "PARENT", l.old}])
+				emit(byAnchor[lineAnchor{f.path, "PARENT", l.old}])
 			}
 		}
 		var leftover []int

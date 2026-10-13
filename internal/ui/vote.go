@@ -21,11 +21,11 @@ type voteLabel struct {
 }
 
 type voteModel struct {
-	open     bool
-	labels   []voteLabel
-	cursor   int
-	message  textinput.Model
-	inputing bool
+	open    bool
+	labels  []voteLabel
+	cursor  int
+	message textinput.Model
+	typing  bool
 }
 
 // newVote lists the labels the user may vote on, preselecting their
@@ -88,10 +88,10 @@ type voteSubmitMsg struct {
 }
 
 func (v voteModel) Update(msg tea.KeyMsg) (voteModel, tea.Cmd) {
-	if v.inputing {
+	if v.typing {
 		switch msg.String() {
 		case "esc":
-			v.inputing = false
+			v.typing = false
 			v.message.Blur()
 			return v, nil
 		case "enter":
@@ -125,7 +125,7 @@ func (v voteModel) Update(msg tea.KeyMsg) (voteModel, tea.Cmd) {
 			v.labels[v.cursor].chosen = 0
 		}
 	case "i", "m", "tab":
-		v.inputing = true
+		v.typing = true
 		v.message.Focus()
 		return v, textinput.Blink
 	case "enter":
@@ -153,7 +153,7 @@ func (v voteModel) View(width int) string {
 	for i, l := range v.labels {
 		marker := "  "
 		name := styleMuted.Render(pad(l.name, 18))
-		if i == v.cursor && !v.inputing {
+		if i == v.cursor && !v.typing {
 			marker = styleAccent.Render("▌ ")
 			name = styleAccent.Bold(true).Render(pad(l.name, 18))
 		}
@@ -184,7 +184,7 @@ func (v voteModel) View(width int) string {
 	}
 	b.WriteString("\n")
 	label := styleMuted.Render("message  ")
-	if v.inputing {
+	if v.typing {
 		label = styleAccent.Bold(true).Render("message  ")
 	}
 	b.WriteString(label + v.message.View() + "\n\n")

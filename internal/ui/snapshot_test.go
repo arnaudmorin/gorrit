@@ -23,11 +23,10 @@ func TestSnapshot(t *testing.T) {
 	lipgloss.SetColorProfile(termenv.TrueColor)
 	client := gerrit.New(url, os.Getenv("GORRIT_USERNAME"), os.Getenv("GORRIT_TOKEN"))
 	app := New(client, Options{Filters: append(config.AnonymousFilters, config.Filter{Name: "Nova", Query: "project:openstack/nova"}), BugURL: config.DefaultBugURL})
-	app.width, app.height = 150, 36
 	app.dashboard.width, app.dashboard.height = 150, 36
 	app.detail.resize(150, 36)
 
-	msg := app.dashboard.load()()
+	msg := app.dashboard.refresh()()
 	if m := msg.(dashboardLoadedMsg); m.err != nil {
 		t.Fatal(m.err)
 	}

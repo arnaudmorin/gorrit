@@ -7,15 +7,16 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/arnaudmorin/gorrit/internal/config"
 	"github.com/arnaudmorin/gorrit/internal/gerrit"
 )
 
 func TestDashboardViewBeforeResize(t *testing.T) {
-	m := newDashboard(gerrit.New("https://example.org", "", ""), nil)
+	m := newDashboard(gerrit.New("https://example.org", "", ""), config.AnonymousFilters)
 	for _, size := range [][2]int{{0, 0}, {80, 1}, {80, 2}, {80, 3}, {20, 5}} {
 		m.width, m.height = size[0], size[1]
 		_ = m.View()
-		m, _ = m.Update(dashboardLoadedMsg{sections: []section{{title: "s", query: "q", changes: []gerrit.ChangeInfo{{Number: 1, Subject: "x"}, {Number: 2}}}}})
+		m, _ = m.Update(dashboardLoadedMsg{query: m.fullQuery(), changes: []gerrit.ChangeInfo{{Number: 1, Subject: "x"}, {Number: 2}}})
 		m.cursor = 1
 		_ = m.View()
 	}
@@ -40,11 +41,11 @@ func TestLoadMoreLive(t *testing.T) {
 	if url == "" {
 		t.Skip("GORRIT_TEST_URL not set")
 	}
-	m := newDashboard(gerrit.New(url, "", ""), nil)
+	m := newDashboard(gerrit.New(url, "", ""), config.AnonymousFilters)
 	m.width, m.height = 160, 40
-	m, _ = m.Update(m.load()())
-	first := len(m.sections[0].changes)
-	if first == 0 || !m.sections[0].changes[first-1].MoreChanges {
+	m, _ = m.Update(m.refresh()())
+	first := len(m.changes)
+	if first == 0 || !m.changes[first-1].MoreChanges {
 		t.Skip("first page not full")
 	}
 	m.cursor = first - 1
@@ -53,23 +54,23 @@ func TestLoadMoreLive(t *testing.T) {
 		t.Fatal("expected a load-more command")
 	}
 	m, _ = m.Update(cmd())
-	if got := len(m.sections[0].changes); got <= first {
+	if got := len(m.changes); got <= first {
 		t.Fatalf("got %d changes after paging, had %d", got, first)
 	}
-	if m.sections[0].changes[first-1].MoreChanges {
+	if m.changes[first-1].MoreChanges {
 		t.Fatal("page boundary still flagged as more")
 	}
-	t.Logf("paged from %d to %d changes", first, len(m.sections[0].changes))
+	t.Logf("paged from %d to %d changes", first, len(m.changes))
 }
 
 func TestScrollDoesNotSnapBack(t *testing.T) {
-	m := newDashboard(gerrit.New("https://example.org", "", ""), nil)
+	m := newDashboard(gerrit.New("https://example.org", "", ""), config.AnonymousFilters)
 	m.width, m.height = 120, 12
 	var changes []gerrit.ChangeInfo
 	for i := 0; i < 40; i++ {
 		changes = append(changes, gerrit.ChangeInfo{Number: i + 1, Subject: "x"})
 	}
-	m, _ = m.Update(dashboardLoadedMsg{sections: []section{{title: "s", query: "q", changes: changes}}})
+	m, _ = m.Update(dashboardLoadedMsg{query: m.fullQuery(), changes: changes})
 	key := func(r rune) { m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}}) }
 	for i := 0; i < 30; i++ {
 		key('j')

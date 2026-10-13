@@ -16,9 +16,9 @@ func TestRenderAgainstLiveServer(t *testing.T) {
 	}
 	client := gerrit.New(url, os.Getenv("GORRIT_USERNAME"), os.Getenv("GORRIT_TOKEN"))
 
-	dash := newDashboard(client, nil)
+	dash := newDashboard(client, config.AnonymousFilters)
 	dash.width, dash.height = 160, 30
-	msg := dash.load()()
+	msg := dash.refresh()()
 	loaded := msg.(dashboardLoadedMsg)
 	if loaded.err != nil {
 		t.Fatal(loaded.err)

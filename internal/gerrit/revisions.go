@@ -43,7 +43,10 @@ func (c *Client) GetFileContent(ctx context.Context, id, rev, path string, paren
 		return nil, false, err
 	}
 	content, err = decodeBase64(raw)
-	return content, err == nil, err
+	if err != nil {
+		return nil, false, err
+	}
+	return content, true, nil
 }
 
 // GetPatch returns the revision as a git format-patch.

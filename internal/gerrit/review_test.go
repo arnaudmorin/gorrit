@@ -26,7 +26,7 @@ func TestSetReviewReply(t *testing.T) {
 	in := ReviewInput{Comments: map[string][]CommentInput{
 		"a/b.py": {{Line: 12, InReplyTo: "abc", Message: "Done", Unresolved: &unresolved}},
 	}}
-	if _, err := client.SetReview(context.Background(), ChangeID("foo/bar", 42), "3", in); err != nil {
+	if err := client.SetReview(context.Background(), ChangeID("foo/bar", 42), "3", in); err != nil {
 		t.Fatal(err)
 	}
 	if want := "POST /a/changes/foo%2Fbar~42/revisions/3/review"; gotPath != want {

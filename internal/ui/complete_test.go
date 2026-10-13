@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
 
+	"github.com/arnaudmorin/gorrit/internal/config"
 	"github.com/arnaudmorin/gorrit/internal/gerrit"
 )
 
@@ -75,7 +76,7 @@ func TestCompleterLive(t *testing.T) {
 
 	if dir := os.Getenv("GORRIT_SNAPSHOT_DIR"); dir != "" {
 		lipgloss.SetColorProfile(termenv.TrueColor)
-		m := newDashboard(client, nil)
+		m := newDashboard(client, config.AnonymousFilters)
 		m.width, m.height = 140, 8
 		m.searching = true
 		m.search.Focus()

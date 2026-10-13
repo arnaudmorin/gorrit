@@ -3,7 +3,6 @@ package ui
 import (
 	"context"
 	"fmt"
-	"os/exec"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -17,12 +16,14 @@ import (
 
 var dashboardQueryOptions = []string{"LABELS", "DETAILED_ACCOUNTS", "SUBMITTABLE", "STAR"}
 
-const filterLimit = 50
+var dashboardLabels = []string{"Code-Review", "Verified", "Workflow"}
+
+const pageLimit = 50
 
 // Tab indexes: 0..n-1 are the configured filters, tabSearch an ad-hoc query.
 const tabSearch = -1
 
-// statusFilter narrows every query of the current tab by change status.
+// statusFilter narrows the query of the current tab by change status.
 type statusFilter int
 
 const (
@@ -62,30 +63,21 @@ func (f statusFilter) apply(query string) string {
 	return query
 }
 
-type section struct {
-	title   string
+// dashboardLoadedMsg carries the first page of a query, moreLoadedMsg the
+// following ones. Both name their query so stale answers can be ignored.
+type dashboardLoadedMsg struct {
 	query   string
 	changes []gerrit.ChangeInfo
-}
-
-type dashboardLoadedMsg struct {
-	sections []section
-	err      error
+	err     error
 }
 
 type moreLoadedMsg struct {
-	section int
 	query   string
 	changes []gerrit.ChangeInfo
 	err     error
 }
 
 type openChangeMsg struct{ id string }
-
-type starToggleMsg struct {
-	id      string
-	starred bool
-}
 
 type starDoneMsg struct {
 	id      string
@@ -100,20 +92,15 @@ func toggleStar(client *gerrit.Client, id string, starred bool) tea.Cmd {
 	}
 }
 
-type row struct {
-	section int
-	change  int
-}
-
 type dashboardModel struct {
 	client      *gerrit.Client
 	selfID      int
 	filters     []config.Filter
 	tab         int
 	status      statusFilter
-	limit       int
-	sections    []section
-	rows        []row
+	title       string
+	query       string
+	changes     []gerrit.ChangeInfo
 	cursor      int
 	offset      int
 	loading     bool
@@ -138,81 +125,68 @@ func newDashboard(client *gerrit.Client, filters []config.Filter) dashboardModel
 			filters = config.DefaultFilters
 		}
 	}
-	m := dashboardModel{
-		client:  client,
-		filters: filters,
-		limit:   filterLimit,
-		loading: true,
-		search:  ti,
-	}
+	m := dashboardModel{client: client, filters: filters, loading: true, search: ti}
 	m.applyTab(0)
 	return m
 }
 
-// applyTab sets the sections for a filter tab without loading.
+// applyTab points the dashboard at a filter tab without loading it.
 func (m *dashboardModel) applyTab(tab int) {
 	m.tab = tab
 	m.status = statusOpen
-	if tab >= 0 && tab < len(m.filters) {
-		f := m.filters[tab]
-		m.sections = []section{{title: f.Name, query: f.Query}}
-	}
+	m.title = m.filters[tab].Name
+	m.query = m.filters[tab].Query
 }
 
-// showTab switches the dashboard to a tab and reloads it.
 func (m *dashboardModel) showTab(tab int) tea.Cmd {
 	m.applyTab(tab)
+	return m.reload()
+}
+
+// reload fetches the current query from the top.
+func (m *dashboardModel) reload() tea.Cmd {
 	m.cursor = 0
 	m.offset = 0
+	return m.refresh()
+}
+
+// refresh fetches the current query again, keeping the cursor where it is.
+func (m *dashboardModel) refresh() tea.Cmd {
 	m.err = nil
 	m.loading = true
-	return m.load()
-}
-
-func (m dashboardModel) load() tea.Cmd {
-	sections, client, limit, status := m.sections, m.client, m.limit, m.status
+	client, query := m.client, m.fullQuery()
 	return func() tea.Msg {
-		queries := make([]string, len(sections))
-		for i, s := range sections {
-			queries[i] = status.apply(s.query)
-		}
-		results, err := client.QueryChanges(context.Background(), queries, gerrit.QueryOptions{
-			Limit:   limit,
+		changes, err := client.QueryChanges(context.Background(), query, gerrit.QueryOptions{
+			Limit:   pageLimit,
 			Options: dashboardQueryOptions,
 		})
-		if err != nil {
-			return dashboardLoadedMsg{err: err}
-		}
-		out := make([]section, len(sections))
-		for i, s := range sections {
-			s.changes = results[i]
-			out[i] = s
-		}
-		return dashboardLoadedMsg{sections: out}
+		return dashboardLoadedMsg{query: query, changes: changes, err: err}
 	}
 }
 
-// loadMore fetches the next page of one section.
-func (m *dashboardModel) loadMore(si int) tea.Cmd {
-	if m.loadingMore || si < 0 || si >= len(m.sections) {
-		return nil
-	}
-	sec := m.sections[si]
-	if n := len(sec.changes); n == 0 || !sec.changes[n-1].MoreChanges {
+func (m dashboardModel) fullQuery() string {
+	return m.status.apply(m.query)
+}
+
+func (m dashboardModel) hasMore() bool {
+	n := len(m.changes)
+	return n > 0 && m.changes[n-1].MoreChanges
+}
+
+// loadMore fetches the next page when Gerrit said there is one.
+func (m *dashboardModel) loadMore() tea.Cmd {
+	if m.loadingMore || !m.hasMore() {
 		return nil
 	}
 	m.loadingMore = true
-	client, limit, start, query := m.client, m.limit, len(sec.changes), m.status.apply(sec.query)
+	client, query, start := m.client, m.fullQuery(), len(m.changes)
 	return func() tea.Msg {
-		results, err := client.QueryChanges(context.Background(), []string{query}, gerrit.QueryOptions{
-			Limit:   limit,
+		changes, err := client.QueryChanges(context.Background(), query, gerrit.QueryOptions{
+			Limit:   pageLimit,
 			Start:   start,
 			Options: dashboardQueryOptions,
 		})
-		if err != nil {
-			return moreLoadedMsg{section: si, query: sec.query, err: err}
-		}
-		return moreLoadedMsg{section: si, query: sec.query, changes: results[0]}
+		return moreLoadedMsg{query: query, changes: changes, err: err}
 	}
 }
 
@@ -238,27 +212,15 @@ func (m *dashboardModel) adjustScroll() {
 	m.offset = min(m.offset, max(len(lines)-h, 0))
 }
 
-func (m *dashboardModel) rebuildRows() {
-	m.rows = m.rows[:0]
-	for si, s := range m.sections {
-		for ci := range s.changes {
-			m.rows = append(m.rows, row{section: si, change: ci})
-		}
-	}
-	if m.cursor >= len(m.rows) {
-		m.cursor = len(m.rows) - 1
-	}
-	if m.cursor < 0 {
-		m.cursor = 0
-	}
+func (m *dashboardModel) clampCursor() {
+	m.cursor = min(max(m.cursor, 0), max(len(m.changes)-1, 0))
 }
 
 func (m dashboardModel) selected() *gerrit.ChangeInfo {
-	if len(m.rows) == 0 {
+	if len(m.changes) == 0 {
 		return nil
 	}
-	r := m.rows[m.cursor]
-	return &m.sections[r.section].changes[r.change]
+	return &m.changes[m.cursor]
 }
 
 func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
@@ -270,24 +232,39 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 func (m dashboardModel) update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case dashboardLoadedMsg:
+		if msg.query != m.fullQuery() {
+			return m, nil
+		}
 		m.loading = false
 		m.err = msg.err
 		if msg.err == nil {
-			m.sections = msg.sections
-			m.rebuildRows()
+			m.changes = msg.changes
+			m.clampCursor()
 		}
+		return m, nil
+	case moreLoadedMsg:
+		m.loadingMore = false
+		if msg.query != m.fullQuery() {
+			return m, nil
+		}
+		if msg.err != nil {
+			m.err = msg.err
+			return m, nil
+		}
+		if n := len(m.changes); n > 0 {
+			m.changes[n-1].MoreChanges = false
+		}
+		m.changes = append(m.changes, msg.changes...)
 		return m, nil
 	case starDoneMsg:
 		if msg.err != nil {
 			m.notice = styleError.Render("star: " + msg.err.Error() + " ")
 			return m, nil
 		}
-		for si := range m.sections {
-			for ci := range m.sections[si].changes {
-				c := &m.sections[si].changes[ci]
-				if gerrit.ChangeID(c.Project, c.Number) == msg.id {
-					c.Starred = msg.starred
-				}
+		for i := range m.changes {
+			c := &m.changes[i]
+			if gerrit.ChangeID(c.Project, c.Number) == msg.id {
+				c.Starred = msg.starred
 			}
 		}
 		return m, nil
@@ -299,106 +276,79 @@ func (m dashboardModel) update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 			}
 		}
 		return m, nil
-	case moreLoadedMsg:
-		m.loadingMore = false
-		if msg.err != nil {
-			m.err = msg.err
-			return m, nil
-		}
-		if msg.section < len(m.sections) && m.sections[msg.section].query == msg.query {
-			sec := &m.sections[msg.section]
-			if n := len(sec.changes); n > 0 {
-				sec.changes[n-1].MoreChanges = false
-			}
-			sec.changes = append(sec.changes, msg.changes...)
-			m.rebuildRows()
-		}
-		return m, nil
 	case tea.KeyMsg:
 		if m.searching {
 			return m.updateSearch(msg)
 		}
-		switch msg.String() {
-		case "j", "down":
-			if m.cursor < len(m.rows)-1 {
-				next := m.rows[m.cursor+1]
-				if next.section != m.rows[m.cursor].section {
-					if cmd := m.loadMore(m.rows[m.cursor].section); cmd != nil {
-						return m, cmd
-					}
-				}
-				m.cursor++
-			} else if len(m.rows) > 0 {
-				return m, m.loadMore(m.rows[m.cursor].section)
-			}
-		case "k", "up":
-			if m.cursor > 0 {
-				m.cursor--
-			}
-		case "g", "home":
-			m.cursor = 0
-		case "G", "end":
-			m.cursor = len(m.rows) - 1
-			if m.cursor < 0 {
-				m.cursor = 0
-			}
-		case "ctrl+d", "pgdown":
-			m.cursor = min(m.cursor+m.pageSize(), max(len(m.rows)-1, 0))
-		case "ctrl+u", "pgup":
-			m.cursor = max(m.cursor-m.pageSize(), 0)
-		case "enter", "l":
-			if c := m.selected(); c != nil {
-				id := gerrit.ChangeID(c.Project, c.Number)
-				return m, func() tea.Msg { return openChangeMsg{id: id} }
-			}
-		case "d":
-			if c := m.selected(); c != nil {
-				id := gerrit.ChangeID(c.Project, c.Number)
-				return m, func() tea.Msg { return openDiffMsg{id: id} }
-			}
-		case "*":
-			if c := m.selected(); c != nil && m.client.Authenticated() {
-				return m, toggleStar(m.client, gerrit.ChangeID(c.Project, c.Number), !c.Starred)
-			}
-		case "o":
-			if c := m.selected(); c != nil {
-				url := fmt.Sprintf("%s/c/%s/+/%d", m.client.BaseURL(), c.Project, c.Number)
-				return m, func() tea.Msg {
-					_ = exec.Command("xdg-open", url).Start()
-					return nil
-				}
-			}
-		case "r":
-			m.loading = true
-			m.err = nil
-			return m, m.load()
-		case "/":
-			m.searching = true
-			m.search.Focus()
-			return m, textinput.Blink
-		case "esc":
-			if m.tab == tabSearch {
-				return m, m.showTab(0)
-			}
-		case "1", "2", "3", "4", "5", "6", "7", "8", "9":
-			tab := int(msg.String()[0]-'0') - 1
-			if tab < len(m.filters) && tab != m.tab {
-				return m, m.showTab(tab)
-			}
-		case "s":
-			m.status = m.status.next()
-			return m, m.reload()
-		case "tab", "shift+tab":
-			count := min(len(m.filters), 9)
-			cur := max(m.tab, 0)
-			if msg.String() == "tab" {
-				cur = (cur + 1) % count
-			} else {
-				cur = (cur + count - 1) % count
-			}
-			return m, m.showTab(cur)
-		}
+		return m.updateKey(msg)
 	}
+	return m, nil
+}
+
+func (m dashboardModel) updateKey(msg tea.KeyMsg) (dashboardModel, tea.Cmd) {
+	switch msg.String() {
+	case "j", "down":
+		if m.cursor >= len(m.changes)-1 {
+			return m, m.loadMore()
+		}
+		m.cursor++
+	case "k", "up":
+		m.cursor--
+	case "g", "home":
+		m.cursor = 0
+	case "G", "end":
+		m.cursor = len(m.changes) - 1
+	case "ctrl+d", "pgdown":
+		m.cursor += m.bodyHeight()
+	case "ctrl+u", "pgup":
+		m.cursor -= m.bodyHeight()
+	case "enter", "l":
+		if c := m.selected(); c != nil {
+			id := gerrit.ChangeID(c.Project, c.Number)
+			return m, func() tea.Msg { return openChangeMsg{id: id} }
+		}
+	case "d":
+		if c := m.selected(); c != nil {
+			id := gerrit.ChangeID(c.Project, c.Number)
+			return m, func() tea.Msg { return openDiffMsg{id: id} }
+		}
+	case "*":
+		if c := m.selected(); c != nil && m.client.Authenticated() {
+			return m, toggleStar(m.client, gerrit.ChangeID(c.Project, c.Number), !c.Starred)
+		}
+	case "o":
+		if c := m.selected(); c != nil {
+			return m, openBrowser(m.client.ChangeURL(c.Project, c.Number))
+		}
+	case "r":
+		return m, m.refresh()
+	case "/":
+		m.searching = true
+		m.search.Focus()
+		return m, textinput.Blink
+	case "esc":
+		if m.tab == tabSearch {
+			return m, m.showTab(0)
+		}
+	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
+		tab := int(msg.String()[0]-'0') - 1
+		if tab < len(m.filters) && tab != m.tab {
+			return m, m.showTab(tab)
+		}
+	case "s":
+		m.status = m.status.next()
+		return m, m.reload()
+	case "tab", "shift+tab":
+		count := min(len(m.filters), 9)
+		cur := max(m.tab, 0)
+		if msg.String() == "tab" {
+			cur = (cur + 1) % count
+		} else {
+			cur = (cur + count - 1) % count
+		}
+		return m, m.showTab(cur)
+	}
+	m.clampCursor()
 	return m, nil
 }
 
@@ -426,25 +376,16 @@ func (m dashboardModel) updateSearch(msg tea.KeyMsg) (dashboardModel, tea.Cmd) {
 			return m, nil
 		}
 		m.tab = tabSearch
-		m.sections = []section{{title: "Search: " + q, query: q}}
-		m.limit = filterLimit
 		m.status = statusAll
-		m.cursor = 0
-		m.loading = true
-		m.err = nil
-		return m, m.load()
+		m.title = "Search: " + q
+		m.query = q
+		return m, m.reload()
 	}
 	m.complete.reset()
 	var cmd tea.Cmd
 	m.search, cmd = m.search.Update(msg)
 	return m, cmd
 }
-
-func (m dashboardModel) pageSize() int {
-	return max(m.height-4, 1)
-}
-
-var dashboardLabels = []string{"Code-Review", "Verified", "Workflow"}
 
 func (m dashboardModel) View() string {
 	var b strings.Builder
@@ -486,32 +427,19 @@ func (m dashboardModel) View() string {
 	return b.String()
 }
 
-func (m *dashboardModel) reload() tea.Cmd {
-	m.cursor = 0
-	m.offset = 0
-	m.err = nil
-	m.loading = true
-	return m.load()
-}
-
-// tabsView renders the dashboard and filter tabs with the active one highlighted.
+// tabsView renders the filter tabs with the active one highlighted.
 func (m dashboardModel) tabsView() string {
-	tab := func(index int, name string) string {
-		label := fmt.Sprintf(" %d %s ", index, name)
-		if index-1 == m.tab {
-			return styleTabActive.Render(label)
-		}
-		return styleTab.Render(label)
-	}
 	var parts []string
-	for i, f := range m.filters {
-		if i >= 9 {
-			break
+	for i, f := range m.filters[:min(len(m.filters), 9)] {
+		label := fmt.Sprintf(" %d %s ", i+1, f.Name)
+		if i == m.tab {
+			parts = append(parts, styleTabActive.Render(label))
+		} else {
+			parts = append(parts, styleTab.Render(label))
 		}
-		parts = append(parts, tab(i+1, f.Name))
 	}
 	if m.tab == tabSearch {
-		parts = append(parts, styleTabActive.Render(" / "+ansi.Truncate(m.sections[0].query, 40, "…")+" "))
+		parts = append(parts, styleTabActive.Render(" / "+ansi.Truncate(m.query, 40, "…")+" "))
 	}
 	left := " " + strings.Join(parts, " ")
 	right := styleMuted.Render("status ") + styleAccent.Bold(true).Render(m.status.String()) + styleMuted.Render(" (s) ")
@@ -522,109 +450,94 @@ func (m dashboardModel) tabsView() string {
 	return left + strings.Repeat(" ", gap) + right
 }
 
+// renderRows renders the change table and reports the line holding the cursor.
 func (m dashboardModel) renderRows() ([]string, int) {
-	labels := dashboardLabels
 	const (
 		wNum    = 8
 		wFlags  = 2
 		wOwner  = 18
 		wProj   = 26
 		wBranch = 14
+		wVote   = 4
 		wStat   = 12
 		wAge    = 4
 		gutter  = 2
 	)
-	const wVote = 4
-	labelWidth := len(labels) * (wVote + 1)
-	wSubject := m.width - gutter - wNum - wFlags - wOwner - wProj - wBranch - labelWidth - wStat - wAge - 8
-	if wSubject < 20 {
-		wSubject = 20
+	labelWidth := len(dashboardLabels) * (wVote + 1)
+	wSubject := max(m.width-gutter-wNum-wFlags-wOwner-wProj-wBranch-labelWidth-wStat-wAge-8, 20)
+
+	lines := []string{rule(fmt.Sprintf("%s (%d)", m.title, len(m.changes)), m.width)}
+	if len(m.changes) == 0 {
+		lines = append(lines, styleMuted.Render("  nothing here"))
+		return lines, 0
 	}
 
 	header := strings.Repeat(" ", gutter) + padLeft("#", wNum) + " " + pad("", wFlags) + " " + pad("SUBJECT", wSubject) + " " +
 		pad("OWNER", wOwner) + " " + pad("PROJECT", wProj) + " " + pad("BRANCH", wBranch) + " "
-	for _, l := range labels {
+	for _, l := range dashboardLabels {
 		header += padLeft(labelAbbrev(l), wVote) + " "
 	}
 	header += pad("SIZE", wStat) + " " + padLeft("AGE", wAge)
+	lines = append(lines, styleColHead.Render(header))
 
-	var lines []string
 	cursorLine := 0
-	rowIdx := 0
-	for si, s := range m.sections {
-		if si > 0 {
-			lines = append(lines, "")
-		}
-		lines = append(lines, rule(fmt.Sprintf("%s (%d)", s.title, len(s.changes)), m.width))
-		if len(s.changes) == 0 {
-			lines = append(lines, styleMuted.Render("  nothing here"))
-			continue
-		}
-		lines = append(lines, styleColHead.Render(header))
-		for i := range s.changes {
-			c := &s.changes[i]
-			selected := rowIdx == m.cursor
-			st := func(base lipgloss.Style) lipgloss.Style { return onRow(base, selected) }
-			sp := st(lipgloss.NewStyle()).Render(" ")
+	for i := range m.changes {
+		c := &m.changes[i]
+		selected := i == m.cursor
+		st := func(base lipgloss.Style) lipgloss.Style { return onRow(base, selected) }
+		sp := st(lipgloss.NewStyle()).Render(" ")
 
-			flag := sp
-			if _, ok := c.AttentionSet[fmt.Sprint(m.selfID)]; ok && m.selfID != 0 {
-				flag = st(styleYellow).Render("●")
-			}
-			if c.Starred {
-				flag += st(styleYellow).Render("★")
+		flag := sp
+		if _, ok := c.AttentionSet[fmt.Sprint(m.selfID)]; ok && m.selfID != 0 {
+			flag = st(styleYellow).Render("●")
+		}
+		if c.Starred {
+			flag += st(styleYellow).Render("★")
+		} else {
+			flag += sp
+		}
+		number := st(styleMuted).Render(padLeft(fmt.Sprint(c.Number), wNum))
+		prefix := ""
+		if c.WorkInProgress {
+			prefix += st(styleYellow).Render("WIP ")
+		}
+		if c.IsPrivate {
+			prefix += st(styleSection).Render("PRIVATE ")
+		}
+		if c.Topic != "" {
+			prefix += st(styleAccent).Render(c.Topic) + st(styleMuted).Render(" · ")
+		}
+		if ansi.StringWidth(prefix) > wSubject-10 {
+			prefix = ansi.Truncate(prefix, wSubject-10, "…")
+		}
+		subject := prefix + st(styleText).Render(pad(c.Subject, wSubject-ansi.StringWidth(prefix)))
+		owner := st(styleOwner).Render(pad(c.Owner.Label(), wOwner))
+		project := st(styleMuted).Render(pad(c.Project, wProj))
+		branch := st(styleMuted).Render(pad(c.Branch, wBranch))
+
+		line := number + sp + flag + sp + subject + sp + owner + sp + project + sp + branch + sp
+		for _, l := range dashboardLabels {
+			if info, ok := c.Labels[l]; ok {
+				line += voteCell(info, wVote, selected) + sp
 			} else {
-				flag += sp
+				line += st(lipgloss.NewStyle()).Render(strings.Repeat(" ", wVote+1))
 			}
-			number := st(styleMuted).Render(padLeft(fmt.Sprint(c.Number), wNum))
-			subject := st(styleText).Render(pad(c.Subject, wSubject))
-			prefix := ""
-			if c.WorkInProgress {
-				prefix += st(styleYellow).Render("WIP ")
-			}
-			if c.IsPrivate {
-				prefix += st(styleSection).Render("PRIVATE ")
-			}
-			if c.Topic != "" {
-				prefix += st(styleAccent).Render(c.Topic) + st(styleMuted).Render(" · ")
-			}
-			if prefix != "" {
-				rest := wSubject - ansi.StringWidth(prefix)
-				if rest < 10 {
-					prefix = ansi.Truncate(prefix, wSubject-10, "…")
-					rest = wSubject - ansi.StringWidth(prefix)
-				}
-				subject = prefix + st(styleText).Render(pad(c.Subject, rest))
-			}
-			owner := st(styleOwner).Render(pad(c.Owner.Label(), wOwner))
-			project := st(styleMuted).Render(pad(c.Project, wProj))
-			branch := st(styleMuted).Render(pad(c.Branch, wBranch))
-
-			line := number + sp + flag + sp + subject + sp + owner + sp + project + sp + branch + sp
-			for _, l := range labels {
-				if info, ok := c.Labels[l]; ok {
-					line += voteCell(info, wVote, selected) + sp
-				} else {
-					line += st(lipgloss.NewStyle()).Render(strings.Repeat(" ", wVote+1))
-				}
-			}
-			line += diffStat(c.Insertions, c.Deletions, selected) + sp + st(styleMuted).Render(padLeft(age(c.Updated.Time), wAge))
-
-			if selected {
-				cursorLine = len(lines)
-				line = st(styleAccent).Render("▌ ") + line
-				if fill := m.width - ansi.StringWidth(line); fill > 0 {
-					line += st(lipgloss.NewStyle()).Render(strings.Repeat(" ", fill))
-				}
-			} else {
-				line = strings.Repeat(" ", gutter) + line
-			}
-			lines = append(lines, line)
-			rowIdx++
 		}
-		if n := len(s.changes); n > 0 && s.changes[n-1].MoreChanges {
-			lines = append(lines, styleMuted.Render("  … more changes match this query, move down past the last row to load them"))
+		line += diffStat(c.Insertions, c.Deletions, selected) + sp + st(styleMuted).Render(padLeft(age(c.Updated.Time), wAge))
+
+		if selected {
+			cursorLine = len(lines)
+			line = st(styleAccent).Render("▌ ") + line
+			if fill := m.width - ansi.StringWidth(line); fill > 0 {
+				line += st(lipgloss.NewStyle()).Render(strings.Repeat(" ", fill))
+			}
+		} else {
+			line = strings.Repeat(" ", gutter) + line
 		}
+		lines = append(lines, line)
+	}
+	if m.hasMore() {
+		lines = append(lines, styleMuted.Render("  … more changes match this query, move down past the last row to load them"))
 	}
 	return lines, cursorLine
 }

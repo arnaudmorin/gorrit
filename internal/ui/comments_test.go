@@ -20,15 +20,15 @@ func TestCommentsLive(t *testing.T) {
 	}
 	lipgloss.SetColorProfile(termenv.TrueColor)
 	client := gerrit.New(url, "", "")
-	results, err := client.QueryChanges(context.Background(), []string{"is:open project:openstack/neutron"}, gerrit.QueryOptions{Limit: 30})
+	results, err := client.QueryChanges(context.Background(), "is:open project:openstack/neutron", gerrit.QueryOptions{Limit: 30})
 	if err != nil {
 		t.Fatal(err)
 	}
 	var change *gerrit.ChangeInfo
 	var comments map[string][]gerrit.CommentInfo
 	var id string
-	for i := range results[0] {
-		cand := &results[0][i]
+	for i := range results {
+		cand := &results[i]
 		if cand.TotalCommentCount == 0 {
 			continue
 		}

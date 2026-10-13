@@ -15,11 +15,11 @@ func TestBuildDiffCommandLive(t *testing.T) {
 		t.Skip("GORRIT_TEST_URL not set")
 	}
 	client := gerrit.New(url, "", "")
-	results, err := client.QueryChanges(context.Background(), []string{"is:open project:openstack/neutron"}, gerrit.QueryOptions{Limit: 1})
-	if err != nil || len(results[0]) == 0 {
+	results, err := client.QueryChanges(context.Background(), "is:open project:openstack/neutron", gerrit.QueryOptions{Limit: 1})
+	if err != nil || len(results) == 0 {
 		t.Fatalf("query: %v", err)
 	}
-	c := results[0][0]
+	c := results[0]
 	id := gerrit.ChangeID(c.Project, c.Number)
 	t.Logf("change %d %s", c.Number, c.Subject)
 

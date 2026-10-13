@@ -62,6 +62,28 @@ func (c *Client) endpoint(path string, query url.Values) string {
 	return u
 }
 
+// send runs a request with credentials and returns the body, or an
+// HTTPError for non-2xx responses.
+func (c *Client) send(req *http.Request) ([]byte, error) {
+	if c.Authenticated() {
+		req.SetBasicAuth(c.username, c.token)
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, &HTTPError{Status: resp.StatusCode, Body: string(raw)}
+	}
+	return raw, nil
+}
+
+// do sends in as JSON and decodes the JSON response into out when given.
 func (c *Client) do(ctx context.Context, method, path string, query url.Values, in, out any) error {
 	var body io.Reader
 	if in != nil {
@@ -79,26 +101,11 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 	if in != nil {
 		req.Header.Set("Content-Type", "application/json; charset=UTF-8")
 	}
-	if c.Authenticated() {
-		req.SetBasicAuth(c.username, c.token)
-	}
-	resp, err := c.http.Do(req)
-	if err != nil {
+	raw, err := c.send(req)
+	if err != nil || out == nil || len(raw) == 0 {
 		return err
 	}
-	defer resp.Body.Close()
-	raw, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return &HTTPError{Status: resp.StatusCode, Body: string(raw)}
-	}
-	if out == nil || resp.StatusCode == http.StatusNoContent {
-		return nil
-	}
-	raw = bytes.TrimPrefix(raw, xssiPrefix)
-	return json.Unmarshal(raw, out)
+	return json.Unmarshal(bytes.TrimPrefix(raw, xssiPrefix), out)
 }
 
 // getRaw fetches a non-JSON endpoint. Gerrit serves file contents and patches
@@ -108,22 +115,7 @@ func (c *Client) getRaw(ctx context.Context, path string, query url.Values) ([]b
 	if err != nil {
 		return nil, err
 	}
-	if c.Authenticated() {
-		req.SetBasicAuth(c.username, c.token)
-	}
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	raw, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, &HTTPError{Status: resp.StatusCode, Body: string(raw)}
-	}
-	return raw, nil
+	return c.send(req)
 }
 
 func (c *Client) get(ctx context.Context, path string, query url.Values, out any) error {

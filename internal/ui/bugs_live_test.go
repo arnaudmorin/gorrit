@@ -21,11 +21,11 @@ func TestBugHeaderLive(t *testing.T) {
 	}
 	lipgloss.SetColorProfile(termenv.TrueColor)
 	client := gerrit.New(url, "", "")
-	results, err := client.QueryChanges(context.Background(), []string{"is:open project:openstack/nova message:Closes-Bug"}, gerrit.QueryOptions{Limit: 1})
-	if err != nil || len(results[0]) == 0 {
+	results, err := client.QueryChanges(context.Background(), "is:open project:openstack/nova message:Closes-Bug", gerrit.QueryOptions{Limit: 1})
+	if err != nil || len(results) == 0 {
 		t.Skipf("no change found: %v", err)
 	}
-	c := results[0][0]
+	c := results[0]
 	change, err := client.GetChangeDetail(context.Background(), gerrit.ChangeID(c.Project, c.Number), detailOptions...)
 	if err != nil {
 		t.Fatal(err)

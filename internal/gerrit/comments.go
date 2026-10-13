@@ -52,18 +52,10 @@ type ReviewInput struct {
 	Notify   string                    `json:"notify,omitempty"`
 }
 
-type ReviewResult struct {
-	Labels map[string]int `json:"labels"`
-}
-
 // SetReview posts a review on a revision: comments, votes and a message in
 // one request. rev is a patch set number, commit or "current".
-func (c *Client) SetReview(ctx context.Context, id, rev string, in ReviewInput) (*ReviewResult, error) {
-	var out ReviewResult
-	if err := c.post(ctx, revisionPath(id, rev)+"/review", in, &out); err != nil {
-		return nil, err
-	}
-	return &out, nil
+func (c *Client) SetReview(ctx context.Context, id, rev string, in ReviewInput) error {
+	return c.post(ctx, revisionPath(id, rev)+"/review", in, nil)
 }
 
 // ListComments returns the published inline comments of all patch sets,
@@ -76,17 +68,4 @@ func (c *Client) ListComments(ctx context.Context, id string) (map[string][]Comm
 		return nil, err
 	}
 	return comments, nil
-}
-
-// GetChange fetches a change without the detail extras.
-func (c *Client) GetChange(ctx context.Context, id string, options ...string) (*ChangeInfo, error) {
-	q := url.Values{}
-	for _, o := range options {
-		q.Add("o", o)
-	}
-	var change ChangeInfo
-	if err := c.get(ctx, "/changes/"+id, q, &change); err != nil {
-		return nil, err
-	}
-	return &change, nil
 }

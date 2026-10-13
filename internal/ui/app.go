@@ -30,8 +30,6 @@ type Model struct {
 	view        view
 	dashboard   dashboardModel
 	detail      detailModel
-	width       int
-	height      int
 }
 
 type Options struct {
@@ -51,7 +49,7 @@ func New(client *gerrit.Client, opts Options) Model {
 }
 
 func (m Model) Init() tea.Cmd {
-	cmds := []tea.Cmd{m.dashboard.load()}
+	cmds := []tea.Cmd{m.dashboard.refresh()}
 	if m.client.Authenticated() {
 		client := m.client
 		cmds = append(cmds, func() tea.Msg {
@@ -62,10 +60,13 @@ func (m Model) Init() tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
+// Update handles app-wide messages itself, delivers load results to the view
+// that asked for them whether or not it is showing, and sends everything
+// else (keys, mouse, resize) to the visible view.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.width, m.height = msg.Width, msg.Height
 		m.dashboard.width, m.dashboard.height = msg.Width, msg.Height
 		m.detail.resize(msg.Width, msg.Height)
 		return m, nil
@@ -91,7 +92,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.view = viewDashboard
 		return m, nil
 	case starDoneMsg:
-		var cmd tea.Cmd
 		m.dashboard, cmd = m.dashboard.Update(msg)
 		m.detail, _ = m.detail.Update(msg)
 		return m, cmd
@@ -115,17 +115,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.setNotice(styleError.Render(fmt.Sprintf("diff viewer exited with %d ", exit.ExitCode())))
 		}
 		return m, nil
-	case dashboardLoadedMsg:
-		var cmd tea.Cmd
+	case dashboardLoadedMsg, moreLoadedMsg, completionsMsg:
 		m.dashboard, cmd = m.dashboard.Update(msg)
 		return m, cmd
-	case detailLoadedMsg, replySentMsg:
-		var cmd tea.Cmd
+	case detailLoadedMsg, patchLoadedMsg, replySentMsg, downloadDoneMsg, voteSubmitMsg:
 		m.detail, cmd = m.detail.Update(msg)
 		return m, cmd
 	}
 
-	var cmd tea.Cmd
 	switch m.view {
 	case viewDashboard:
 		m.dashboard, cmd = m.dashboard.Update(msg)
@@ -141,10 +138,15 @@ func (m *Model) setNotice(s string) {
 }
 
 func (m Model) View() string {
-	switch m.view {
-	case viewDetail:
+	if m.view == viewDetail {
 		return m.detail.View()
-	default:
-		return m.dashboard.View()
+	}
+	return m.dashboard.View()
+}
+
+func openBrowser(url string) tea.Cmd {
+	return func() tea.Msg {
+		_ = exec.Command("xdg-open", url).Start()
+		return nil
 	}
 }
