@@ -167,6 +167,26 @@ func statusBadge(c *gerrit.ChangeInfo) string {
 	return strings.Join(parts, " ")
 }
 
+// myVotes lists the caller's non-zero votes as "CR+2 W+1".
+func myVotes(c *gerrit.ChangeInfo, selfID int, selected bool) string {
+	if selfID == 0 {
+		return ""
+	}
+	var parts []string
+	for _, name := range listLabels {
+		for _, a := range c.Labels[name].All {
+			if a.AccountID == selfID && a.Value != 0 {
+				st := styleGreen
+				if a.Value < 0 {
+					st = styleRed
+				}
+				parts = append(parts, onRow(st, selected).Render(fmt.Sprintf("%s%+d", labelAbbrev(name), a.Value)))
+			}
+		}
+	}
+	return strings.Join(parts, onRow(lipgloss.NewStyle(), selected).Render(" "))
+}
+
 // statusCell shows the change state in the list, in the colours used by
 // the detail badges.
 func statusCell(c *gerrit.ChangeInfo, width int, selected bool) string {

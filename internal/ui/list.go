@@ -462,12 +462,13 @@ func (m listModel) renderRows() ([]string, int) {
 		wProj   = 26
 		wBranch = 14
 		wVote   = 4
+		wMine   = 13
 		wStat   = 12
 		wAge    = 4
 		gutter  = 2
 	)
 	labelWidth := len(listLabels) * (wVote + 1)
-	wSubject := max(m.width-gutter-wNum-wFlags-wStatus-wOwner-wProj-wBranch-labelWidth-wStat-wAge-9, 20)
+	wSubject := max(m.width-gutter-wNum-wFlags-wStatus-wOwner-wProj-wBranch-labelWidth-wMine-wStat-wAge-10, 20)
 
 	lines := []string{rule(fmt.Sprintf("%s (%d)", m.title, len(m.changes)), m.width)}
 	if len(m.changes) == 0 {
@@ -480,7 +481,7 @@ func (m listModel) renderRows() ([]string, int) {
 	for _, l := range listLabels {
 		header += padLeft(labelAbbrev(l), wVote) + " "
 	}
-	header += pad("SIZE", wStat) + " " + padLeft("AGE", wAge)
+	header += pad("MINE", wMine) + " " + pad("SIZE", wStat) + " " + padLeft("AGE", wAge)
 	lines = append(lines, styleColHead.Render(header))
 
 	cursorLine := 0
@@ -523,7 +524,14 @@ func (m listModel) renderRows() ([]string, int) {
 				line += st(lipgloss.NewStyle()).Render(strings.Repeat(" ", wVote+1))
 			}
 		}
-		line += diffStat(c.Insertions, c.Deletions, selected) + sp + st(styleMuted).Render(padLeft(age(c.Updated.Time), wAge))
+		mine := myVotes(c, m.selfID, selected)
+		if mine == "" {
+			mine = st(styleMuted).Render("·")
+		}
+		if fill := wMine - ansi.StringWidth(mine); fill > 0 {
+			mine += st(lipgloss.NewStyle()).Render(strings.Repeat(" ", fill))
+		}
+		line += mine + sp + diffStat(c.Insertions, c.Deletions, selected) + sp + st(styleMuted).Render(padLeft(age(c.Updated.Time), wAge))
 
 		if selected {
 			cursorLine = len(lines)
