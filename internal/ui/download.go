@@ -118,8 +118,12 @@ func (d downloadModel) Update(msg tea.KeyMsg) (downloadModel, tea.Cmd) {
 		}
 		d.open = false
 		script := fmt.Sprintf(`echo '$ %s'; %s; echo
-printf 'Press enter to return to gorrit, or s for a shell here: '
-read -r answer
+printf 'Press any key to return to gorrit, or s for a shell here: '
+if [ -t 0 ]; then
+  saved=$(stty -g); stty raw -echo; answer=$(dd bs=1 count=1 2>/dev/null); stty "$saved"; echo
+else
+  read -r answer
+fi
 if [ "$answer" = s ]; then exec "${SHELL:-sh}"; fi
 `, strings.ReplaceAll(command, "'", `'"'"'`), command)
 		cmd := exec.Command("sh", "-c", script)
