@@ -77,7 +77,7 @@ threads and `c` then replies. Replies and comments are published right away.
 
 `d` sends the patch set to the command in `[diff]`. The default is a real
 `git diff --no-index` between the before and after trees, so your git pager
-and colours apply. For hunk with
+and colours apply. For [hunk](https://github.com/modem-dev/hunk) with
 Gerrit comments shown as notes:
 
 ```toml
