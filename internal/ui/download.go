@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"sort"
 	"strings"
@@ -117,24 +118,55 @@ func (d downloadModel) Update(msg tea.KeyMsg) (downloadModel, tea.Cmd) {
 			return d, nil
 		}
 		d.open = false
-		script := fmt.Sprintf(`echo '$ %s'; %s; echo
-printf 'Press any key to return to gorrit, or s for a shell here: '
+		return d, d.run(name, command, "", nil)
+	case "t":
+		name, command := d.selected()
+		if command == "" {
+			return d, nil
+		}
+		if !strings.HasPrefix(command, "git fetch ") {
+			return d, func() tea.Msg {
+				return downloadDoneMsg{notice: styleError.Render(name + " needs an existing clone, use enter ")}
+			}
+		}
+		dir, err := os.MkdirTemp("", "gorrit-checkout-")
+		if err != nil {
+			return d, func() tea.Msg { return downloadDoneMsg{notice: styleError.Render(err.Error() + " ")} }
+		}
+		d.open = false
+		shallow := "git init -q && " + strings.Replace(command, "git fetch ", "git fetch --depth 2 ", 1)
+		return d, d.run(name, shallow, dir, func() { os.RemoveAll(dir) })
+	}
+	return d, nil
+}
+
+// run executes a download command in dir (or the current directory), then
+// waits for a key: any returns to gorrit, s opens a shell there first.
+func (d downloadModel) run(name, command, dir string, cleanup func()) tea.Cmd {
+	note := ""
+	if dir != "" {
+		note = " (temporary repo, deleted on return)"
+	}
+	script := fmt.Sprintf(`echo '$ %s'; %s; echo
+printf 'Press any key to return to gorrit, or s for a shell here%s: '
 if [ -t 0 ]; then
   saved=$(stty -g); stty raw -echo; answer=$(dd bs=1 count=1 2>/dev/null); stty "$saved"; echo
 else
   read -r answer
 fi
 if [ "$answer" = s ]; then exec "${SHELL:-sh}"; fi
-`, strings.ReplaceAll(command, "'", `'"'"'`), command)
-		cmd := exec.Command("sh", "-c", script)
-		return d, d.exec(cmd, func(err error) tea.Msg {
-			if err != nil {
-				return downloadDoneMsg{notice: styleError.Render(name + " failed: " + err.Error() + " ")}
-			}
-			return downloadDoneMsg{notice: styleGreen.Render(name + " done ")}
-		})
-	}
-	return d, nil
+`, strings.ReplaceAll(command, "'", `'"'"'`), command, note)
+	cmd := exec.Command("sh", "-c", script)
+	cmd.Dir = dir
+	return d.exec(cmd, func(err error) tea.Msg {
+		if cleanup != nil {
+			cleanup()
+		}
+		if err != nil {
+			return downloadDoneMsg{notice: styleError.Render(name + " failed: " + err.Error() + " ")}
+		}
+		return downloadDoneMsg{notice: styleGreen.Render(name + " done ")}
+	})
 }
 
 func (d downloadModel) View(width int) string {
@@ -166,6 +198,6 @@ func (d downloadModel) View(width int) string {
 			b.WriteString("    " + styleText.Render(line) + "\n")
 		}
 	}
-	b.WriteString("\n" + styleMuted.Render("j/k select · s scheme · y copy · enter run here · esc close"))
+	b.WriteString("\n" + styleMuted.Render("j/k select · s scheme · y copy · enter run here · t run in a temp repo · esc close"))
 	return styleBox.Width(inner + 4).Render(strings.TrimRight(b.String(), "\n"))
 }
