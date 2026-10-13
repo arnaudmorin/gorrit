@@ -518,13 +518,30 @@ func (m detailModel) View() string {
 	}
 	var keys string
 	if m.page == pageDiff {
-		keys = hints(0,
-			keyHint{"j/k", "line"}, keyHint{"c", "comment"}, keyHint{"n/N", "threads"}, keyHint{"x", "done"},
-			keyHint{"d", "external diff"}, keyHint{"esc", "summary"})
+		items := []keyHint{{"j/k", "line"}}
+		if m.selectedThread() != nil {
+			items = append(items, keyHint{"c", "reply"}, keyHint{"x", "done"})
+		} else {
+			items = append(items, keyHint{"c", "comment"})
+		}
+		if len(m.visibleThreads()) > 0 {
+			items = append(items, keyHint{"n/N", "threads"})
+		}
+		items = append(items, keyHint{"d", "external diff"}, keyHint{"esc", "summary"})
+		keys = hints(0, items...)
 	} else {
-		keys = hints(0,
-			keyHint{"j/k", "scroll"}, keyHint{"enter", "diff"}, keyHint{"n/N", "threads"}, keyHint{"c", "reply"}, keyHint{"x", "done"}, keyHint{"m", "message"}, keyHint{"v", "vote"}, keyHint{"*", "star"},
-			keyHint{"t", "bots"}, keyHint{"d", "external diff"}, keyHint{"D", "download"}, keyHint{"o", "browser"}, keyHint{"b", "bug"}, keyHint{"r", "refresh"}, keyHint{"esc", "back"})
+		items := []keyHint{{"j/k", "scroll"}, {"enter", "diff"}}
+		if len(m.threads) > 0 {
+			items = append(items, keyHint{"n/N", "threads"})
+		}
+		if m.selectedThread() != nil {
+			items = append(items, keyHint{"c", "reply"}, keyHint{"x", "done"})
+		}
+		items = append(items,
+			keyHint{"m", "message"}, keyHint{"v", "vote"}, keyHint{"*", "star"}, keyHint{"t", "bots"},
+			keyHint{"d", "external diff"}, keyHint{"D", "download"}, keyHint{"o", "browser"}, keyHint{"b", "bug"},
+			keyHint{"r", "refresh"}, keyHint{"esc", "back"})
+		keys = hints(0, items...)
 	}
 	b.WriteString(bar(keys, styleBarMuted.Render(fmt.Sprintf("%3.0f%% ", m.viewport.ScrollPercent()*100)), m.width))
 	return b.String()
