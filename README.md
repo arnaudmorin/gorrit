@@ -31,8 +31,8 @@ override the file.
 ### Change list
 
 Tabs are named Gerrit queries from your config: `tab` or `1`-`9` switch,
-`s` cycles open / merged / all, `/` runs an ad-hoc query with `tab`
-completion of operators, projects and accounts. Move down past the last row
+`s` cycles open / merged / all, `/` runs an ad-hoc query, prefilled with the current tab's query so you can
+narrow it, with `tab` completion of operators, projects and accounts. Move down past the last row
 to load more.
 
 | Key | Action |

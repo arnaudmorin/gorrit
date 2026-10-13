@@ -324,6 +324,8 @@ func (m listModel) updateKey(msg tea.KeyMsg) (listModel, tea.Cmd) {
 		return m, m.refresh()
 	case "/":
 		m.searching = true
+		m.search.SetValue(strings.TrimSpace(m.query) + " ")
+		m.search.CursorEnd()
 		m.search.Focus()
 		return m, textinput.Blink
 	case "esc":
