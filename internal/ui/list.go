@@ -370,7 +370,7 @@ func (m listModel) updateSearch(msg tea.KeyMsg) (listModel, tea.Cmd) {
 		m.search.CursorEnd()
 		return m, cmd
 	case "enter":
-		q := strings.TrimSpace(m.search.Value())
+		q := rewriteBareTerms(strings.TrimSpace(m.search.Value()))
 		m.searching = false
 		m.complete.reset()
 		m.search.Blur()
