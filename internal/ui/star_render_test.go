@@ -26,6 +26,9 @@ func TestStarColumnRender(t *testing.T) {
 		{Number: 1, Subject: "starred and attention", Starred: true, AttentionSet: attention, Owner: gerrit.AccountInfo{Name: "A"}, Project: "p", Branch: "main"},
 		{Number: 2, Subject: "starred only", Starred: true, Owner: gerrit.AccountInfo{Name: "B"}, Project: "p", Branch: "main"},
 		{Number: 3, Subject: "plain", Owner: gerrit.AccountInfo{Name: "C"}, Project: "p", Branch: "main"},
+		{Number: 4, Subject: "merged one", Status: "MERGED", Owner: gerrit.AccountInfo{Name: "D"}, Project: "p", Branch: "main"},
+		{Number: 5, Subject: "gone", Status: "ABANDONED", Owner: gerrit.AccountInfo{Name: "E"}, Project: "p", Branch: "main"},
+		{Number: 6, Subject: "draft", Status: "NEW", WorkInProgress: true, Owner: gerrit.AccountInfo{Name: "F"}, Project: "p", Branch: "main"},
 	}})
 	m.cursor = 1
 	os.WriteFile(filepath.Join(dir, "stars.ansi"), []byte(m.View()), 0o644)

@@ -167,6 +167,21 @@ func statusBadge(c *gerrit.ChangeInfo) string {
 	return strings.Join(parts, " ")
 }
 
+// statusCell shows the change state in the list, in the colours used by
+// the detail badges.
+func statusCell(c *gerrit.ChangeInfo, width int, selected bool) string {
+	switch c.Status {
+	case "MERGED":
+		return onRow(styleGreen, selected).Render(pad("merged", width))
+	case "ABANDONED":
+		return onRow(styleRed, selected).Render(pad("abandoned", width))
+	}
+	if c.WorkInProgress {
+		return onRow(styleYellow, selected).Render(pad("wip", width))
+	}
+	return onRow(styleMuted, selected).Render(pad("open", width))
+}
+
 func fileStatus(status string) string {
 	switch status {
 	case "A":

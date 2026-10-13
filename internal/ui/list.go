@@ -457,6 +457,7 @@ func (m listModel) renderRows() ([]string, int) {
 	const (
 		wNum    = 8
 		wFlags  = 2
+		wStatus = 9
 		wOwner  = 18
 		wProj   = 26
 		wBranch = 14
@@ -466,7 +467,7 @@ func (m listModel) renderRows() ([]string, int) {
 		gutter  = 2
 	)
 	labelWidth := len(listLabels) * (wVote + 1)
-	wSubject := max(m.width-gutter-wNum-wFlags-wOwner-wProj-wBranch-labelWidth-wStat-wAge-8, 20)
+	wSubject := max(m.width-gutter-wNum-wFlags-wStatus-wOwner-wProj-wBranch-labelWidth-wStat-wAge-9, 20)
 
 	lines := []string{rule(fmt.Sprintf("%s (%d)", m.title, len(m.changes)), m.width)}
 	if len(m.changes) == 0 {
@@ -474,7 +475,7 @@ func (m listModel) renderRows() ([]string, int) {
 		return lines, 0
 	}
 
-	header := strings.Repeat(" ", gutter) + padLeft("#", wNum) + " " + pad("", wFlags) + " " + pad("SUBJECT", wSubject) + " " +
+	header := strings.Repeat(" ", gutter) + padLeft("#", wNum) + " " + pad("", wFlags) + " " + pad("STATUS", wStatus) + " " + pad("SUBJECT", wSubject) + " " +
 		pad("OWNER", wOwner) + " " + pad("PROJECT", wProj) + " " + pad("BRANCH", wBranch) + " "
 	for _, l := range listLabels {
 		header += padLeft(labelAbbrev(l), wVote) + " "
@@ -500,9 +501,6 @@ func (m listModel) renderRows() ([]string, int) {
 		}
 		number := st(styleMuted).Render(padLeft(fmt.Sprint(c.Number), wNum))
 		prefix := ""
-		if c.WorkInProgress {
-			prefix += st(styleYellow).Render("WIP ")
-		}
 		if c.IsPrivate {
 			prefix += st(styleSection).Render("PRIVATE ")
 		}
@@ -517,7 +515,7 @@ func (m listModel) renderRows() ([]string, int) {
 		project := st(styleMuted).Render(pad(c.Project, wProj))
 		branch := st(styleMuted).Render(pad(c.Branch, wBranch))
 
-		line := number + sp + flag + sp + subject + sp + owner + sp + project + sp + branch + sp
+		line := number + sp + flag + sp + statusCell(c, wStatus, selected) + sp + subject + sp + owner + sp + project + sp + branch + sp
 		for _, l := range listLabels {
 			if info, ok := c.Labels[l]; ok {
 				line += voteCell(info, wVote, selected) + sp
