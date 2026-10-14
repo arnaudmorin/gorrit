@@ -12,7 +12,13 @@ import (
 	"github.com/arnaudmorin/gorrit/internal/ui"
 )
 
+var version = "dev"
+
 func main() {
+	if len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "-v") {
+		fmt.Println("gorrit", version)
+		return
+	}
 	cfg, err := config.Load()
 	if errors.Is(err, config.ErrNotFound) {
 		cfg, err = setup()

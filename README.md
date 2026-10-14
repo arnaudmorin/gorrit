@@ -13,7 +13,8 @@ terminal.
 go install github.com/arnaudmorin/gorrit/cmd/gorrit@latest
 ```
 
-Or clone and run `make build`.
+Or grab a binary from the [releases](https://github.com/arnaudmorin/gorrit/releases),
+or clone and run `make build`.
 
 ## Setup
 
@@ -99,6 +100,12 @@ command with no placeholder receives the patch on stdin.
 skipped unless `GORRIT_TEST_URL` is set, for example to
 `https://review.opendev.org`. `hack/ansi2png.py` renders the ANSI snapshots
 those tests write into images, which is how the screenshots above are made.
+
+## Releasing
+
+Push a `v*` tag pointing at a commit on master, for example
+`git tag v0.1.0 && git push origin v0.1.0`. GitHub Actions runs the tests
+and publishes a release with Linux and macOS binaries through GoReleaser.
 
 ## License
 

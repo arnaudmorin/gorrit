@@ -1,0 +1,19 @@
+version: 2
+
+builds:
+  - main: ./cmd/gorrit
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+
+archives:
+  - files: [README.md, LICENSE, config.example.toml]
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc

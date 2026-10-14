@@ -20,7 +20,7 @@ GORRIT_TEST_URL=https://review.opendev.org go test ./internal/ui/   # also run l
 ## Conventions
 
 - Keep the user's global rules: no narrating comments, short commit messages, trailer `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`.
-- Do not push. Commit only when asked.
+- Do not push or tag. Commit only when asked. Releases are cut by pushing a `v*` tag (see README).
 - Writes to Gerrit (replies, votes, stars) are tested against a `httptest` fake server, never against a real change.
 - To look at the UI, run the snapshot tests with `GORRIT_SNAPSHOT_DIR=<dir>` and convert the `.ansi` files with `python3 -I hack/ansi2png.py in.ansi out.png`, then view the PNG. Styling changes should be checked this way. The README screenshots in `docs/` are made the same way.
 - Keys are listed in README.md; update it when they change.
