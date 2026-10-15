@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textarea"
@@ -24,6 +25,7 @@ type detailLoadedMsg struct {
 
 type patchLoadedMsg struct {
 	id    string
+	base  int
 	files []diffFile
 	err   error
 }
@@ -61,7 +63,8 @@ type detailModel struct {
 
 	page        page
 	files       []diffFile
-	hasPatch    bool
+	diffs       map[int][]diffFile // by base patch set, 0 for the parent
+	diffBase    int
 	diffPos     int // index into diffLines
 	diffLines   []int
 	diffAnchors map[int]lineAnchor
@@ -95,7 +98,8 @@ func (m *detailModel) open(id string) tea.Cmd {
 	m.selected = -1
 	m.page = pageSummary
 	m.files = nil
-	m.hasPatch = false
+	m.diffs = nil
+	m.diffBase = 0
 	m.composing = false
 	m.viewport.GotoTop()
 	return m.load()
@@ -115,16 +119,63 @@ func (m *detailModel) load() tea.Cmd {
 	}
 }
 
-func (m *detailModel) loadPatch() tea.Cmd {
+func (m *detailModel) loadPatch(base int) tea.Cmd {
 	m.loading = true
 	client, id := m.client, m.id
 	return func() tea.Msg {
+		if base > 0 {
+			files, err := loadInterdiff(context.Background(), client, id, base)
+			return patchLoadedMsg{id: id, base: base, files: files, err: err}
+		}
 		raw, err := client.GetPatch(context.Background(), id, gerrit.RevisionCurrent)
 		if err != nil {
 			return patchLoadedMsg{id: id, err: err}
 		}
 		return patchLoadedMsg{id: id, files: parsePatch(raw)}
 	}
+}
+
+// diffSteps lists what ] walks through after the summary: the patch set
+// against its parent, then against each older patch set, newest first.
+func (m detailModel) diffSteps() []int {
+	steps := []int{0}
+	for ps := m.change.CurrentRevisionNumber - 1; ps >= 1; ps-- {
+		steps = append(steps, ps)
+	}
+	return steps
+}
+
+func (m *detailModel) stepDiff(dir int) tea.Cmd {
+	if m.change == nil {
+		return nil
+	}
+	steps := m.diffSteps()
+	pos := -1
+	if m.page == pageDiff {
+		pos = slices.Index(steps, m.diffBase)
+	}
+	pos += dir
+	switch {
+	case pos < 0:
+		if m.page == pageDiff {
+			m.showPage(pageSummary)
+		}
+		return nil
+	case pos >= len(steps):
+		return nil
+	}
+	base := steps[pos]
+	if files, ok := m.diffs[base]; ok {
+		m.showDiff(base, files)
+		return nil
+	}
+	return m.loadPatch(base)
+}
+
+func (m *detailModel) showDiff(base int, files []diffFile) {
+	m.diffBase = base
+	m.files = files
+	m.showPage(pageDiff)
 }
 
 // review posts a review on the change and reports back with replySentMsg.
@@ -164,7 +215,7 @@ func (m *detailModel) refreshContent() {
 		if m.diffPos >= 0 && m.diffPos < len(m.diffLines) {
 			cursor = m.diffLines[m.diffPos]
 		}
-		r := renderDiff(m.files, m.threads, m.change, m.width, m.selected, m.change.CurrentRevisionNumber, cursor)
+		r := renderDiff(m.files, m.threads, m.change, m.width, m.selected, m.change.CurrentRevisionNumber, m.diffBase, cursor)
 		content, m.threadAt, m.diffAnchors, m.diffLines = r.content, r.threadAt, r.anchors, r.lines
 		if m.diffPos >= len(m.diffLines) {
 			m.diffPos = max(len(m.diffLines)-1, 0)
@@ -292,6 +343,9 @@ func (m detailModel) Update(msg tea.Msg) (detailModel, tea.Cmd) {
 		m.loading = false
 		m.err = msg.err
 		if msg.err == nil {
+			if m.change != nil && m.change.CurrentRevision != msg.change.CurrentRevision {
+				m.diffs = nil
+			}
 			m.change = msg.change
 			m.threads = threads(msg.comments)
 			if m.selected >= len(m.threads) {
@@ -309,9 +363,11 @@ func (m detailModel) Update(msg tea.Msg) (detailModel, tea.Cmd) {
 			m.notice = styleError.Render("patch: " + msg.err.Error() + " ")
 			return m, nil
 		}
-		m.files = msg.files
-		m.hasPatch = true
-		m.showPage(pageDiff)
+		if m.diffs == nil {
+			m.diffs = map[int][]diffFile{}
+		}
+		m.diffs[msg.base] = msg.files
+		m.showDiff(msg.base, msg.files)
 		return m, nil
 	case replySentMsg:
 		if msg.id != m.id {
@@ -324,7 +380,7 @@ func (m detailModel) Update(msg tea.Msg) (detailModel, tea.Cmd) {
 		}
 		m.notice = styleGreen.Render("posted ")
 		m.closeComposer()
-		m.hasPatch = false
+		m.diffs = nil
 		return m, m.load()
 	case downloadDoneMsg:
 		m.notice = msg.notice
@@ -386,15 +442,10 @@ func (m detailModel) updateKey(msg tea.KeyMsg) (detailModel, tea.Cmd) {
 			return m, nil
 		}
 		return m, func() tea.Msg { return closeDetailMsg{} }
-	case "enter":
-		if m.page == pageSummary && m.change != nil {
-			if m.hasPatch {
-				m.showPage(pageDiff)
-				return m, nil
-			}
-			return m, m.loadPatch()
-		}
-		return m, nil
+	case "]":
+		return m, m.stepDiff(1)
+	case "[":
+		return m, m.stepDiff(-1)
 	case "n":
 		m.moveThread(1)
 		return m, nil
@@ -486,7 +537,7 @@ func (m detailModel) View() string {
 	if m.change != nil {
 		title = fmt.Sprintf("%s · change %d", m.change.Project, m.change.Number)
 		if m.page == pageDiff {
-			title += fmt.Sprintf(" · diff of patch set %d", m.change.CurrentRevisionNumber)
+			title += " · " + diffScopeLabel(m.change.CurrentRevisionNumber, m.diffBase)
 		}
 	}
 	left := styleLogo.Render("gorrit") + styleBar.Render(" ") + styleBarMuted.Render(title)
@@ -527,10 +578,15 @@ func (m detailModel) View() string {
 		if len(m.visibleThreads()) > 0 {
 			items = append(items, keyHint{"n/N", "threads"})
 		}
+		if m.change != nil && m.change.CurrentRevisionNumber > 1 {
+			items = append(items, keyHint{"[/]", "patch sets"})
+		} else {
+			items = append(items, keyHint{"[", "summary"})
+		}
 		items = append(items, keyHint{"d", "external diff"}, keyHint{"esc", "summary"})
 		keys = hints(0, items...)
 	} else {
-		items := []keyHint{{"j/k", "scroll"}, {"enter", "diff"}}
+		items := []keyHint{{"j/k", "scroll"}, {"]", "diff"}}
 		if len(m.threads) > 0 {
 			items = append(items, keyHint{"n/N", "threads"})
 		}

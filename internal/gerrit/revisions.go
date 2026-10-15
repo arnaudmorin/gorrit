@@ -16,12 +16,31 @@ func revisionPath(id, rev string) string {
 	return "/changes/" + id + "/revisions/" + url.PathEscape(rev)
 }
 
-func (c *Client) ListFiles(ctx context.Context, id, rev string) (map[string]FileInfo, error) {
+// ListFiles lists the files of a revision against its parent, or against
+// patch set base when base is 1 or more.
+func (c *Client) ListFiles(ctx context.Context, id, rev string, base int) (map[string]FileInfo, error) {
 	var files map[string]FileInfo
-	if err := c.get(ctx, revisionPath(id, rev)+"/files/", nil, &files); err != nil {
+	if err := c.get(ctx, revisionPath(id, rev)+"/files/", baseQuery(base), &files); err != nil {
 		return nil, err
 	}
 	return files, nil
+}
+
+// GetDiff returns the diff of one file of a revision against its parent, or
+// against patch set base when base is 1 or more.
+func (c *Client) GetDiff(ctx context.Context, id, rev, path string, base int) (*DiffInfo, error) {
+	var d DiffInfo
+	if err := c.get(ctx, revisionPath(id, rev)+"/files/"+url.PathEscape(path)+"/diff", baseQuery(base), &d); err != nil {
+		return nil, err
+	}
+	return &d, nil
+}
+
+func baseQuery(base int) url.Values {
+	if base < 1 {
+		return nil
+	}
+	return url.Values{"base": {strconv.Itoa(base)}}
 }
 
 func decodeBase64(raw []byte) ([]byte, error) {

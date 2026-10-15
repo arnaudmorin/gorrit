@@ -43,11 +43,42 @@ type diffRender struct {
 	lines    []int              // content lines that take the cursor, in order
 }
 
-// renderDiff writes the unified diff of the current patch set with the
-// threads of that patch set inlined under their lines. cursor is the content
-// line to highlight.
-func renderDiff(files []diffFile, ts []thread, change *gerrit.ChangeInfo, width, selected, patchSet, cursor int) diffRender {
+func diffScopeLabel(patchSet, base int) string {
+	if base > 0 {
+		return fmt.Sprintf("patch set %d against patch set %d", patchSet, base)
+	}
+	return fmt.Sprintf("patch set %d", patchSet)
+}
+
+// diffIntro is the commit subject, patch set details and body of the
+// current revision.
+func diffIntro(change *gerrit.ChangeInfo, base, width int) string {
+	rev := change.CurrentRevisionInfo()
+	if rev == nil || rev.Commit == nil {
+		return ""
+	}
+	short := change.CurrentRevision
+	if len(short) > 10 {
+		short = short[:10]
+	}
+	meta := styleMuted.Render(fmt.Sprintf("%s · %s · %s · %s", diffScopeLabel(rev.Number, base), short, rev.Commit.Author.Name, ageText(rev.Created.Time)))
+	out := wrap(lipgloss.NewStyle().Bold(true).Render(rev.Commit.Subject), width) + "\n" + meta + "\n"
+	_, body, _ := strings.Cut(rev.Commit.Message, "\n")
+	if body = strings.Trim(body, "\n"); strings.TrimSpace(body) != "" {
+		out += "\n" + quote(body, width)
+	}
+	return out
+}
+
+// renderDiff writes the commit intro and the unified diff of the current
+// patch set with the threads of that patch set inlined under their lines.
+// Against an older patch set base, the old side belongs to that patch set and
+// takes no comments. cursor is the content line to highlight.
+func renderDiff(files []diffFile, ts []thread, change *gerrit.ChangeInfo, width, selected, patchSet, base, cursor int) diffRender {
 	w := &lineWriter{}
+	if intro := diffIntro(change, base, width); intro != "" {
+		w.writeln(strings.TrimRight(intro, "\n") + "\n")
+	}
 	positions := map[int]int{}
 	out := diffRender{threadAt: positions, anchors: map[int]lineAnchor{}}
 	mark := func(a lineAnchor) {
@@ -128,9 +159,11 @@ func renderDiff(files []diffFile, ts []thread, change *gerrit.ChangeInfo, width,
 			if l.new > 0 {
 				newNum = fmt.Sprintf("%5d", l.new)
 			}
-			if l.kind == '-' {
+			switch {
+			case l.kind == '-' && base > 0:
+			case l.kind == '-':
 				mark(lineAnchor{path: f.path, side: "PARENT", line: l.old})
-			} else {
+			default:
 				mark(lineAnchor{path: f.path, side: "REVISION", line: l.new})
 			}
 			sel := w.lines == cursor
@@ -154,7 +187,7 @@ func renderDiff(files []diffFile, ts []thread, change *gerrit.ChangeInfo, width,
 			if l.new > 0 {
 				emit(byAnchor[lineAnchor{f.path, "REVISION", l.new}])
 			}
-			if l.old > 0 {
+			if l.old > 0 && base == 0 {
 				emit(byAnchor[lineAnchor{f.path, "PARENT", l.old}])
 			}
 		}

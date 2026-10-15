@@ -18,7 +18,7 @@ import (
 
 func TestDiffAnchorsAndNewComment(t *testing.T) {
 	files := parsePatch([]byte(samplePatch))
-	r := renderDiff(files, nil, &gerrit.ChangeInfo{}, 100, -1, 1, -1)
+	r := renderDiff(files, nil, &gerrit.ChangeInfo{}, 100, -1, 1, 0, -1)
 	var got []lineAnchor
 	for _, idx := range r.lines {
 		got = append(got, r.anchors[idx])
@@ -67,9 +67,7 @@ func TestDiffAnchorsAndNewComment(t *testing.T) {
 		lipgloss.SetColorProfile(termenv.TrueColor)
 		m.width, m.height = 120, 20
 		m.layout()
-		m.files = files
-		m.hasPatch = true
-		m.showPage(pageDiff)
+		m.showDiff(0, files)
 		m.moveLine(3)
 		m, _ = m.startNewComment(*m.cursorAnchor())
 		m.compose.SetValue("Is this intended?")
@@ -88,9 +86,7 @@ func TestDiffPagingMovesCursor(t *testing.T) {
 	m.change = &gerrit.ChangeInfo{CurrentRevisionNumber: 1}
 	m.width, m.height = 100, 22
 	m.layout()
-	m.files = parsePatch([]byte(strings.Join(lines, "\n") + "\n"))
-	m.hasPatch = true
-	m.showPage(pageDiff)
+	m.showDiff(0, parsePatch([]byte(strings.Join(lines, "\n")+"\n")))
 	start := m.diffLines[m.diffPos]
 	m.moveLineBy(m.viewport.Height)
 	if got := m.diffLines[m.diffPos] - start; got < m.viewport.Height-2 || got > m.viewport.Height+2 {

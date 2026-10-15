@@ -73,7 +73,7 @@ func TestCommentsLive(t *testing.T) {
 				break
 			}
 		}
-		r := renderDiff(parsePatch(raw), ts, change, 150, sel, change.CurrentRevisionNumber, -1)
+		r := renderDiff(parsePatch(raw), ts, change, 150, sel, change.CurrentRevisionNumber, 0, -1)
 		page, positions := r.content, r.threadAt
 		t.Logf("diff page: %d lines, %d threads placed, selected %d at line %d", strings.Count(page, "\n"), len(positions), sel, positions[sel])
 		lines := strings.Split(page, "\n")

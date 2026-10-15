@@ -103,7 +103,7 @@ func writeNotes(ctx context.Context, client *gerrit.Client, id, dest string) err
 
 // fetchTrees writes the changed files before (a/) and after (b/) the revision.
 func fetchTrees(ctx context.Context, client *gerrit.Client, id, dir string) error {
-	files, err := client.ListFiles(ctx, id, gerrit.RevisionCurrent)
+	files, err := client.ListFiles(ctx, id, gerrit.RevisionCurrent, 0)
 	if err != nil {
 		return err
 	}

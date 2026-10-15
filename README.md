@@ -60,7 +60,7 @@ are hidden behind `t`.
 
 | Key | Action |
 | --- | --- |
-| `enter` | open the diff page |
+| `]` `[` | step forward / back: summary, diff against the parent, then against each older patch set |
 | `n` `N` | next / previous comment thread |
 | `c` | reply to the selected thread |
 | `x` | reply "Done" and resolve |
@@ -74,9 +74,15 @@ are hidden behind `t`.
 
 ![Diff page](docs/diffpage.png)
 
-The unified diff of the current patch set with comment threads inlined.
+The commit message, then the unified diff of the current patch set with
+comment threads inlined.
 `j` `k` move a line cursor, `c` comments on that line, `n` `N` jump between
 threads and `c` then replies. Replies and comments are published right away.
+
+`]` opens the diff against the parent. On a change with several patch sets,
+`]` then compares the current patch set with the previous one, then with
+each older one, and `[` steps back to the summary. Against an older patch
+set only the new side takes comments. `esc` returns to the summary.
 
 ### External diff viewer
 

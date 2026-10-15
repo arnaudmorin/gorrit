@@ -104,6 +104,19 @@ type FileInfo struct {
 	Size          int64  `json:"size"`
 }
 
+type DiffContent struct {
+	A    []string `json:"a"`
+	B    []string `json:"b"`
+	AB   []string `json:"ab"`
+	Skip int      `json:"skip"`
+}
+
+type DiffInfo struct {
+	ChangeType string        `json:"change_type"`
+	Binary     bool          `json:"binary"`
+	Content    []DiffContent `json:"content"`
+}
+
 type FetchInfo struct {
 	URL      string            `json:"url"`
 	Ref      string            `json:"ref"`
