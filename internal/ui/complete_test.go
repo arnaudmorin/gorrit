@@ -17,8 +17,12 @@ func TestCompleterStatic(t *testing.T) {
 	var c completer
 	client := gerrit.New("https://example.org", "", "")
 	text, cmd := c.complete(client, "is:open proj")
-	if cmd != nil || text != "is:open project:" {
+	if cmd != nil || text != "is:open project" {
 		t.Fatalf("got %q", text)
+	}
+	text, _ = c.complete(client, text)
+	if text != "is:open project:" {
+		t.Fatalf("cycle got %q", text)
 	}
 	text, _ = c.complete(client, text)
 	if text != "is:open projects:" {
@@ -27,6 +31,10 @@ func TestCompleterStatic(t *testing.T) {
 	text, _ = c.complete(client, text)
 	if text != "is:open project:" {
 		t.Fatalf("wrap got %q", text)
+	}
+	text, _ = c.complete(client, "a")
+	if text != "a" || c.index != -1 || len(c.candidates) < 3 {
+		t.Fatalf("mixed case got %q index %d", text, c.index)
 	}
 	text, _ = c.complete(client, "-is:wi")
 	if text != "-is:wip" {

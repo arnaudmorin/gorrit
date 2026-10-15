@@ -36,11 +36,13 @@ var accountOperators = map[string]bool{
 
 var projectOperators = map[string]bool{"project": true, "parentproject": true, "repository": true}
 
-// completer cycles through candidates for the word under the cursor.
+// completer extends the word under the cursor to the prefix its candidates
+// share, then cycles through them.
 type completer struct {
 	base       string   // input text before the word being completed
 	word       string   // the word as typed when completion started
 	candidates []string // full replacements for word
+	common     string   // shown while index is -1
 	index      int
 	pending    string // word a server lookup is running for
 }
@@ -55,7 +57,36 @@ func (c *completer) reset() { *c = completer{} }
 
 func (c completer) active() bool { return len(c.candidates) > 0 }
 
-func (c completer) current() string { return c.base + c.candidates[c.index] }
+func (c completer) current() string {
+	if c.index < 0 {
+		return c.base + c.common
+	}
+	return c.base + c.candidates[c.index]
+}
+
+func (c *completer) start(base, word string, candidates []string) {
+	c.base, c.word, c.candidates, c.pending = base, word, candidates, ""
+	c.common, c.index = word, -1
+	if len(candidates) == 1 {
+		c.index = 0
+		return
+	}
+	if p := commonPrefix(candidates); len(p) > len(word) && strings.HasPrefix(p, word) {
+		c.common = p
+	}
+}
+
+func commonPrefix(words []string) string {
+	p := words[0]
+	for _, w := range words[1:] {
+		n := 0
+		for n < len(p) && n < len(w) && p[n] == w[n] {
+			n++
+		}
+		p = p[:n]
+	}
+	return p
+}
 
 func splitLastWord(input string) (base, word string) {
 	i := strings.LastIndexAny(input, " (")
@@ -111,7 +142,7 @@ func (c *completer) complete(client *gerrit.Client, input string) (string, tea.C
 		c.reset()
 		return input, nil
 	}
-	c.base, c.word = base, word
+	c.start(base, word, c.candidates)
 	return c.current(), nil
 }
 
@@ -165,11 +196,11 @@ func (c *completer) apply(msg completionsMsg, input string) (string, bool) {
 		c.reset()
 		return input, false
 	}
-	c.base, c.word, c.candidates, c.index, c.pending = msg.base, msg.word, msg.candidates, 0, ""
+	c.start(msg.base, msg.word, msg.candidates)
 	return c.current(), true
 }
 
-// view lists the candidates with the current one highlighted.
+// view lists the candidates with the current one, if any, highlighted.
 func (c completer) view(width int) string {
 	if !c.active() {
 		return ""
