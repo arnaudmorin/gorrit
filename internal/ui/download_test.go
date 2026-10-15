@@ -43,7 +43,7 @@ func TestDownloadRunOffersShell(t *testing.T) {
 }
 
 func TestDownloadTempRepo(t *testing.T) {
-	d := newDownload(map[string]gerrit.FetchInfo{"ssh": {Commands: map[string]string{
+	d := newDownload(map[string]gerrit.FetchInfo{"ssh": {URL: "https://example.invalid/p", Commands: map[string]string{
 		"Checkout":    "git fetch https://example.invalid/p refs/changes/1/1/1 && git checkout FETCH_HEAD",
 		"Cherry Pick": "git cherry-pick FETCH_HEAD",
 	}}})
@@ -57,7 +57,7 @@ func TestDownloadTempRepo(t *testing.T) {
 		t.Fatal("expected a command in a temp dir")
 	}
 	script := captured.Args[2]
-	if !strings.Contains(script, "git init -q && git fetch --depth 2 https://example.invalid/p") {
+	if !strings.Contains(script, "git init -q && git remote add origin 'https://example.invalid/p' && git fetch --depth 2 https://example.invalid/p") {
 		t.Fatalf("script: %s", script)
 	}
 	if !strings.Contains(script, `exec "${SHELL:-sh}"`) || strings.Contains(script, "Press any key") {

@@ -134,7 +134,11 @@ func (d downloadModel) Update(msg tea.KeyMsg) (downloadModel, tea.Cmd) {
 			return d, func() tea.Msg { return downloadDoneMsg{notice: styleError.Render(err.Error() + " ")} }
 		}
 		d.open = false
-		shallow := "git init -q && " + strings.Replace(command, "git fetch ", "git fetch --depth 2 ", 1)
+		setup := "git init -q && "
+		if url := d.fetch[d.schemes[d.scheme]].URL; url != "" {
+			setup += "git remote add origin " + shellQuote(url) + " && "
+		}
+		shallow := setup + strings.Replace(command, "git fetch ", "git fetch --depth 2 ", 1)
 		return d, d.run(name, shallow, dir, func() { os.RemoveAll(dir) })
 	}
 	return d, nil
@@ -207,4 +211,8 @@ func (d downloadModel) View(width int) string {
 	}
 	b.WriteString("\n" + styleMuted.Render("j/k select · s scheme · y copy · enter run here · t shell in a temp repo · esc close"))
 	return styleBox.Width(inner + 4).Render(strings.TrimRight(b.String(), "\n"))
+}
+
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }

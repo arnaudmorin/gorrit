@@ -67,7 +67,7 @@ are hidden behind `t`.
 | `x` | reply "Done" and resolve |
 | `m` | post a message on the change |
 | `v` | vote |
-| `D` | download commands: checkout, cherry-pick, … (`y` copies, `enter` runs it here, then any key returns or `s` drops into a shell; `t` checks out into a throwaway shallow repo and opens a shell there) |
+| `D` | download commands: checkout, cherry-pick, … (`y` copies, `enter` runs it here, then any key returns or `s` drops into a shell; `t` checks out into a throwaway shallow repo with `origin` set and opens a shell there) |
 | `b` | open the referenced bug |
 | `esc` | back |
 
