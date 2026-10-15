@@ -41,6 +41,10 @@ words search the change subject, each word on its own and quoted text as a
 phrase; use `message:` for the whole commit message. Move down past the last row
 to load more.
 
+Changes in a relation chain show their place in it before the subject, `1/3`
+being the bottom of a chain of three, coloured per chain so its members stand
+out.
+
 | Key | Action |
 | --- | --- |
 | `j` `k` | move |

@@ -76,3 +76,15 @@ func (c *Client) GetPatch(ctx context.Context, id, rev string) ([]byte, error) {
 	}
 	return decodeBase64(raw)
 }
+
+// GetRelated returns the relation chain of a revision, newest first, or
+// nothing when the change stands alone.
+func (c *Client) GetRelated(ctx context.Context, id, rev string) ([]RelatedChange, error) {
+	var out struct {
+		Changes []RelatedChange `json:"changes"`
+	}
+	if err := c.get(ctx, revisionPath(id, rev)+"/related", nil, &out); err != nil {
+		return nil, err
+	}
+	return out.Changes, nil
+}

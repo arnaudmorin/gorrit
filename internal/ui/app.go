@@ -115,7 +115,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.setNotice(styleError.Render(fmt.Sprintf("diff viewer exited with %d ", exit.ExitCode())))
 		}
 		return m, nil
-	case listLoadedMsg, moreLoadedMsg, completionsMsg:
+	case listLoadedMsg, moreLoadedMsg, chainsLoadedMsg, completionsMsg:
 		m.list, cmd = m.list.Update(msg)
 		return m, cmd
 	case detailLoadedMsg, patchLoadedMsg, replySentMsg, downloadDoneMsg, voteSubmitMsg:

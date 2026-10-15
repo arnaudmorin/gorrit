@@ -117,6 +117,14 @@ type DiffInfo struct {
 	Content    []DiffContent `json:"content"`
 }
 
+type RelatedChange struct {
+	ChangeNumber          int        `json:"_change_number"`
+	RevisionNumber        int        `json:"_revision_number"`
+	CurrentRevisionNumber int        `json:"_current_revision_number"`
+	Status                string     `json:"status"`
+	Commit                CommitInfo `json:"commit"`
+}
+
 type FetchInfo struct {
 	URL      string            `json:"url"`
 	Ref      string            `json:"ref"`

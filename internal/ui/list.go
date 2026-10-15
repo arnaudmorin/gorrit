@@ -101,6 +101,7 @@ type listModel struct {
 	title       string
 	query       string
 	changes     []gerrit.ChangeInfo
+	chains      map[int]chainEntry // by change number
 	cursor      int
 	offset      int
 	loading     bool
@@ -240,6 +241,7 @@ func (m listModel) update(msg tea.Msg) (listModel, tea.Cmd) {
 		if msg.err == nil {
 			m.changes = msg.changes
 			m.clampCursor()
+			return m, loadChains(m.client, m.changes, m.chains)
 		}
 		return m, nil
 	case moreLoadedMsg:
@@ -255,6 +257,14 @@ func (m listModel) update(msg tea.Msg) (listModel, tea.Cmd) {
 			m.changes[n-1].MoreChanges = false
 		}
 		m.changes = append(m.changes, msg.changes...)
+		return m, loadChains(m.client, msg.changes, m.chains)
+	case chainsLoadedMsg:
+		if m.chains == nil {
+			m.chains = map[int]chainEntry{}
+		}
+		for n, e := range msg.entries {
+			m.chains[n] = e
+		}
 		return m, nil
 	case starDoneMsg:
 		if msg.err != nil {
@@ -502,6 +512,9 @@ func (m listModel) renderRows() ([]string, int) {
 		}
 		number := st(styleMuted).Render(padLeft(fmt.Sprint(c.Number), wNum))
 		prefix := ""
+		if pos := m.chains[c.Number].pos; pos.size > 1 {
+			prefix += st(pos.style()).Render(pos.tag()) + st(styleMuted).Render(" · ")
+		}
 		if c.IsPrivate {
 			prefix += st(styleSection).Render("PRIVATE ")
 		}
