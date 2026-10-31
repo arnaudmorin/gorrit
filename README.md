@@ -143,9 +143,10 @@ those tests write into images, which is how the screenshots above are made.
 
 ## Releasing
 
-Push a `v*` tag pointing at a commit on master, for example
-`git tag v0.1.0 && git push origin v0.1.0`. GitHub Actions runs the tests
-and publishes a release with Linux and macOS binaries through GoReleaser.
+Run `hack/release.sh patch` (or `minor`, `major`, or an explicit `vX.Y.Z`)
+on an up-to-date master. It runs the tests, asks for confirmation, then
+creates and pushes the `v*` tag. GitHub Actions runs the tests again and
+publishes a release with Linux and macOS binaries through GoReleaser.
 
 ## License
 
