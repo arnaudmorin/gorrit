@@ -18,7 +18,7 @@ import (
 
 func TestDiffAnchorsAndNewComment(t *testing.T) {
 	files := parsePatch([]byte(samplePatch))
-	r := renderDiff(files, nil, &gerrit.ChangeInfo{}, 100, -1, 1, 0, -1)
+	r := renderDiff(files, nil, reviewNotes{}, &gerrit.ChangeInfo{}, 100, -1, 1, 0, -1)
 	var got []lineAnchor
 	for _, idx := range r.lines {
 		got = append(got, r.anchors[idx])

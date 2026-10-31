@@ -17,6 +17,9 @@ const (
 	// DefaultDiffCommand shows a real git diff between the before and after
 	// trees, which honours the user's git pager and colour settings.
 	DefaultDiffCommand = "git diff --no-index --no-prefix {old} {new}"
+
+	DefaultReviewName    = "claude"
+	DefaultReviewCommand = `claude -p "Review this Gerrit change, its patch is on stdin. Start with a short summary of the change and whether it deserves a +1, ending with a line Verdict: +1 or Verdict: -1. Then give each finding as its own paragraph starting with path:line: where line is in the new version of the file, most important first. Be concise and answer in plain text."`
 )
 
 // ErrNotFound means no config file exists and no URL was given by environment.
@@ -25,6 +28,7 @@ var ErrNotFound = errors.New("no config file")
 type Config struct {
 	Gerrit   Gerrit   `toml:"gerrit"`
 	Diff     Diff     `toml:"diff"`
+	Review   Review   `toml:"review"`
 	Bugs     Bugs     `toml:"bugs"`
 	Messages Messages `toml:"messages"`
 	Filters  []Filter `toml:"filters"`
@@ -50,6 +54,28 @@ func (d Diff) CommandOrDefault() string {
 		return DefaultDiffCommand
 	}
 	return d.Command
+}
+
+// Review configures the AI review run by the "a" key. Command runs in the
+// background like the diff command, with the same placeholders, and what it
+// prints is the review. Name labels it in the UI.
+type Review struct {
+	Name    string `toml:"name"`
+	Command string `toml:"command"`
+}
+
+func (r Review) NameOrDefault() string {
+	if r.Name == "" {
+		return DefaultReviewName
+	}
+	return r.Name
+}
+
+func (r Review) CommandOrDefault() string {
+	if r.Command == "" {
+		return DefaultReviewCommand
+	}
+	return r.Command
 }
 
 // Bugs sets where "Closes-Bug: #id" style footers link to; {id} is replaced.

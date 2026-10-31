@@ -51,6 +51,7 @@ out.
 | `enter` | open change |
 | `*` | star / unstar |
 | `d` | open in external diff viewer |
+| `a` | AI review, see below |
 | `o` | open in browser |
 | `r` | refresh |
 | `q` | quit |
@@ -71,6 +72,7 @@ are hidden behind `t`.
 | `x` | reply "Done" and resolve |
 | `m` | post a message on the change |
 | `v` | vote |
+| `a` | AI review |
 | `D` | download commands: checkout, cherry-pick, … (`y` copies, `enter` runs it here, then any key returns or `s` drops into a shell; `t` checks out into a throwaway shallow repo with `origin` set and opens a shell there) |
 | `b` | open the referenced bug |
 | `esc` | back |
@@ -104,6 +106,33 @@ command = "hunk patch --agent-context {notes} {patch}"
 Placeholders: `{old}` and `{new}` are the before and after trees, `{patch}`
 a unified patch file, `{notes}` the comments in hunk's sidecar format. A
 command with no placeholder receives the patch on stdin.
+
+### AI review
+
+`a` in the list, the summary or the diff asks an AI tool to review the
+current patch set. It runs in the background: the list row shows a spinner,
+then `✓ claude` when the review is done (`✓ claude ps2` once a newer patch
+set is up, `✗` when the command failed). The review appears on the summary
+page under the commit message and is kept in your cache directory across
+runs. Nothing is posted to Gerrit.
+
+Findings written as `path:line: remark` (the line in the new file) also
+show in the diff under that line, marked `✦ claude`. The default prompt asks
+for that form; a custom command should too. Notes only show while the review
+matches the current patch set.
+
+A `Verdict: +1` or `Verdict: -1` line in the review shows next to the
+marker in the list, `✓ claude +1`, and in the title of the review on the
+summary page.
+
+The command and its label are set in `[review]`, with the same placeholders
+as `[diff]`; what it prints is the review. The default is:
+
+```toml
+[review]
+name = "claude"
+command = 'claude -p "Review this Gerrit change, its patch is on stdin. ... ending with a line Verdict: +1 or Verdict: -1. Then give each finding as its own paragraph starting with path:line: ..."'
+```
 
 ## Development
 

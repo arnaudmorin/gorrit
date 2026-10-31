@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -28,6 +29,7 @@ type Model struct {
 	client      *gerrit.Client
 	diffCommand string
 	view        view
+	reviews     *reviewStore
 	list        listModel
 	detail      detailModel
 }
@@ -37,14 +39,24 @@ type Options struct {
 	Filters     []config.Filter
 	BugURL      string
 	Bots        []string
+
+	ReviewName    string
+	ReviewCommand string
+	ReviewDir     string
 }
 
 func New(client *gerrit.Client, opts Options) Model {
+	reviews := newReviewStore(opts.ReviewName, opts.ReviewCommand, opts.ReviewDir)
+	list := newList(client, opts.Filters)
+	list.reviews = reviews
+	detail := newDetail(client, opts.BugURL, opts.Bots)
+	detail.reviews = reviews
 	return Model{
 		client:      client,
 		diffCommand: opts.DiffCommand,
-		list:        newList(client, opts.Filters),
-		detail:      newDetail(client, opts.BugURL, opts.Bots),
+		reviews:     reviews,
+		list:        list,
+		detail:      detail,
 	}
 }
 
@@ -115,6 +127,30 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.setNotice(styleError.Render(fmt.Sprintf("diff viewer exited with %d ", exit.ExitCode())))
 		}
 		return m, nil
+	case reviewRequestMsg:
+		m.setNotice(styleYellow.Render(m.reviews.name + " is reviewing… "))
+		cmd = m.reviews.start(m.client, msg.id)
+		m.detail.refreshReview(msg.id)
+		return m, cmd
+	case reviewTickMsg:
+		m.reviews.frame++
+		if !m.reviews.running() {
+			m.reviews.ticking = false
+			return m, nil
+		}
+		m.detail.refreshReview("")
+		return m, reviewTick()
+	case reviewDoneMsg:
+		notice := styleGreen.Render(fmt.Sprintf("%s review of %s done ", m.reviews.name, changeNumber(msg.id)))
+		if msg.err != nil {
+			notice = styleError.Render(fmt.Sprintf("%s review of %s failed ", m.reviews.name, changeNumber(msg.id)))
+		}
+		if err := m.reviews.finish(msg); err != nil {
+			notice = styleError.Render("saving review: " + err.Error() + " ")
+		}
+		m.setNotice(notice)
+		m.detail.refreshReview(msg.id)
+		return m, nil
 	case listLoadedMsg, moreLoadedMsg, chainsLoadedMsg, completionsMsg:
 		m.list, cmd = m.list.Update(msg)
 		return m, cmd
@@ -149,4 +185,8 @@ func openBrowser(url string) tea.Cmd {
 		_ = exec.Command("xdg-open", url).Start()
 		return nil
 	}
+}
+
+func changeNumber(id string) string {
+	return id[strings.LastIndexByte(id, '~')+1:]
 }

@@ -16,6 +16,7 @@ type renderOpts struct {
 	showAutomated bool
 	bugURL        string
 	bots          []string
+	review        string
 }
 
 // renderChange renders the summary page and returns the content line of
@@ -86,6 +87,7 @@ func renderChange(c *gerrit.ChangeInfo, ts []thread, width int, opts renderOpts)
 		b.WriteString(rule(fmt.Sprintf("Commit message · patch set %d · %s · %s", rev.Number, short, rev.Uploader.Label()), width) + "\n")
 		b.WriteString(quote(rev.Commit.Message, width) + "\n")
 	}
+	b.WriteString(opts.review)
 
 	if rev != nil && len(rev.Files) > 0 {
 		paths := sortedKeys(rev.Files)

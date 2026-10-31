@@ -73,8 +73,9 @@ func diffIntro(change *gerrit.ChangeInfo, base, width int) string {
 // renderDiff writes the commit intro and the unified diff of the current
 // patch set with the threads of that patch set inlined under their lines.
 // Against an older patch set base, the old side belongs to that patch set and
-// takes no comments. cursor is the content line to highlight.
-func renderDiff(files []diffFile, ts []thread, change *gerrit.ChangeInfo, width, selected, patchSet, base, cursor int) diffRender {
+// takes no comments. Review notes go under their new-side line. cursor is the
+// content line to highlight.
+func renderDiff(files []diffFile, ts []thread, notes reviewNotes, change *gerrit.ChangeInfo, width, selected, patchSet, base, cursor int) diffRender {
 	w := &lineWriter{}
 	if intro := diffIntro(change, base, width); intro != "" {
 		w.writeln(strings.TrimRight(intro, "\n") + "\n")
@@ -95,6 +96,28 @@ func renderDiff(files []diffFile, ts []thread, change *gerrit.ChangeInfo, width,
 		byPath[t.path] = append(byPath[t.path], i)
 		if t.root().Line > 0 {
 			byAnchor[threadAnchor(t)] = append(byAnchor[threadAnchor(t)], i)
+		}
+	}
+	notesAt := map[lineAnchor][]int{}
+	notesByPath := map[string][]int{}
+	var strayNotes []int
+	for i, n := range notes.items {
+		path := matchPath(files, n.path)
+		if path == "" {
+			strayNotes = append(strayNotes, i)
+			continue
+		}
+		a := lineAnchor{path, "REVISION", n.line}
+		notesByPath[path] = append(notesByPath[path], i)
+		notesAt[a] = append(notesAt[a], i)
+	}
+	placedNotes := map[int]bool{}
+	emitNotes := func(idx []int) {
+		for _, i := range idx {
+			if !placedNotes[i] {
+				placedNotes[i] = true
+				renderNote(w, notes.name, notes.items[i], matchPath(files, notes.items[i].path) == "", width)
+			}
 		}
 	}
 	emit := func(idx []int) {
@@ -186,6 +209,7 @@ func renderDiff(files []diffFile, ts []thread, change *gerrit.ChangeInfo, width,
 			w.writeln(line)
 			if l.new > 0 {
 				emit(byAnchor[lineAnchor{f.path, "REVISION", l.new}])
+				emitNotes(notesAt[lineAnchor{f.path, "REVISION", l.new}])
 			}
 			if l.old > 0 && base == 0 {
 				emit(byAnchor[lineAnchor{f.path, "PARENT", l.old}])
@@ -201,6 +225,16 @@ func renderDiff(files []diffFile, ts []thread, change *gerrit.ChangeInfo, width,
 			w.writeln(styleMuted.Render("  comments outside the diff context:"))
 			emit(leftover)
 		}
+		leftover = leftover[:0]
+		for _, i := range notesByPath[f.path] {
+			if !placedNotes[i] {
+				leftover = append(leftover, i)
+			}
+		}
+		if len(leftover) > 0 {
+			w.writeln(styleMuted.Render("  " + notes.name + " notes outside the diff context:"))
+			emitNotes(leftover)
+		}
 		w.writeln("")
 	}
 	for i := range ts {
@@ -215,6 +249,39 @@ func renderDiff(files []diffFile, ts []thread, change *gerrit.ChangeInfo, width,
 			emit([]int{i})
 		}
 	}
+	if len(strayNotes) > 0 {
+		w.writeln(rule(notes.name+" notes on files not in this diff", width))
+		emitNotes(strayNotes)
+	}
 	out.content = w.String()
 	return out
+}
+
+// matchPath finds the diff file a review note names, allowing the note to
+// give only the end of the path.
+func matchPath(files []diffFile, path string) string {
+	for _, f := range files {
+		if f.path == path {
+			return f.path
+		}
+	}
+	for _, f := range files {
+		if strings.HasSuffix(f.path, "/"+path) {
+			return f.path
+		}
+	}
+	return ""
+}
+
+func renderNote(w *lineWriter, name string, n reviewNote, withPath bool, width int) {
+	where := fmt.Sprintf("L%d", n.line)
+	if withPath {
+		where = fmt.Sprintf("%s:%d", n.path, n.line)
+	}
+	w.writeln("  " + styleBot.Render("✦ "+name) + styleMuted.Render(" · "+where))
+	for _, line := range strings.Split(n.text, "\n") {
+		for _, wrapped := range strings.Split(wrap(line, width-6), "\n") {
+			w.writeln(styleBot.Render("    │ ") + wrapped)
+		}
+	}
 }

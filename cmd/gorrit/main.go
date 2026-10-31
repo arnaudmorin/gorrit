@@ -28,7 +28,16 @@ func main() {
 		os.Exit(1)
 	}
 	client := gerrit.New(cfg.Gerrit.URL, cfg.Gerrit.Username, cfg.Gerrit.Token)
-	p := tea.NewProgram(ui.New(client, ui.Options{DiffCommand: cfg.Diff.CommandOrDefault(), Filters: cfg.FiltersOrDefault(), BugURL: cfg.Bugs.URLOrDefault(), Bots: cfg.Messages.Bots}), tea.WithAltScreen())
+	opts := ui.Options{
+		DiffCommand:   cfg.Diff.CommandOrDefault(),
+		Filters:       cfg.FiltersOrDefault(),
+		BugURL:        cfg.Bugs.URLOrDefault(),
+		Bots:          cfg.Messages.Bots,
+		ReviewName:    cfg.Review.NameOrDefault(),
+		ReviewCommand: cfg.Review.CommandOrDefault(),
+		ReviewDir:     ui.ReviewDir(cfg.Gerrit.URL),
+	}
+	p := tea.NewProgram(ui.New(client, opts), tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

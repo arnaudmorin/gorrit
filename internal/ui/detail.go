@@ -70,6 +70,7 @@ type detailModel struct {
 	diffAnchors map[int]lineAnchor
 
 	showAutomated bool
+	reviews       *reviewStore
 	download      downloadModel
 	vote          voteModel
 
@@ -88,7 +89,7 @@ func newDetail(client *gerrit.Client, bugURL string, bots []string) detailModel 
 	ta.ShowLineNumbers = false
 	ta.SetHeight(composeHeight - 2)
 	ta.CharLimit = 0
-	return detailModel{client: client, bugURL: bugURL, bots: bots, viewport: viewport.New(0, 0), selected: -1, compose: ta}
+	return detailModel{client: client, bugURL: bugURL, bots: bots, viewport: viewport.New(0, 0), selected: -1, compose: ta, reviews: defaultReviewStore()}
 }
 
 func (m *detailModel) open(id string) tea.Cmd {
@@ -215,13 +216,14 @@ func (m *detailModel) refreshContent() {
 		if m.diffPos >= 0 && m.diffPos < len(m.diffLines) {
 			cursor = m.diffLines[m.diffPos]
 		}
-		r := renderDiff(m.files, m.threads, m.change, m.width, m.selected, m.change.CurrentRevisionNumber, m.diffBase, cursor)
+		r := renderDiff(m.files, m.threads, m.reviews.notes(m.id, m.change.CurrentRevisionNumber), m.change, m.width, m.selected, m.change.CurrentRevisionNumber, m.diffBase, cursor)
 		content, m.threadAt, m.diffAnchors, m.diffLines = r.content, r.threadAt, r.anchors, r.lines
 		if m.diffPos >= len(m.diffLines) {
 			m.diffPos = max(len(m.diffLines)-1, 0)
 		}
 	default:
-		content, m.threadAt = renderChange(m.change, m.threads, m.width, renderOpts{selected: m.selected, showAutomated: m.showAutomated, bugURL: m.bugURL, bots: m.bots})
+		content, m.threadAt = renderChange(m.change, m.threads, m.width, renderOpts{selected: m.selected, showAutomated: m.showAutomated, bugURL: m.bugURL, bots: m.bots,
+			review: m.reviews.section(m.id, m.change.CurrentRevisionNumber, m.width)})
 	}
 	m.viewport.SetContent(content)
 }
@@ -510,6 +512,9 @@ func (m detailModel) updateKey(msg tea.KeyMsg) (detailModel, tea.Cmd) {
 	case "d":
 		id := m.id
 		return m, func() tea.Msg { return openDiffMsg{id: id} }
+	case "a":
+		id := m.id
+		return m, func() tea.Msg { return reviewRequestMsg{id: id} }
 	case "r":
 		return m, m.load()
 	case "o":
@@ -583,7 +588,7 @@ func (m detailModel) View() string {
 		} else {
 			items = append(items, keyHint{"[", "summary"})
 		}
-		items = append(items, keyHint{"d", "external diff"}, keyHint{"esc", "summary"})
+		items = append(items, keyHint{"d", "external diff"}, keyHint{"a", m.reviews.name + " review"}, keyHint{"esc", "summary"})
 		keys = hints(0, items...)
 	} else {
 		items := []keyHint{{"j/k", "scroll"}, {"]", "diff"}}
@@ -595,10 +600,22 @@ func (m detailModel) View() string {
 		}
 		items = append(items,
 			keyHint{"m", "message"}, keyHint{"v", "vote"}, keyHint{"*", "star"}, keyHint{"t", "bots"},
-			keyHint{"d", "external diff"}, keyHint{"D", "download"}, keyHint{"o", "browser"}, keyHint{"b", "bug"},
+			keyHint{"d", "external diff"}, keyHint{"a", m.reviews.name + " review"}, keyHint{"D", "download"}, keyHint{"o", "browser"}, keyHint{"b", "bug"},
 			keyHint{"r", "refresh"}, keyHint{"esc", "back"})
 		keys = hints(0, items...)
 	}
 	b.WriteString(bar(keys, styleBarMuted.Render(fmt.Sprintf("%3.0f%% ", m.viewport.ScrollPercent()*100)), m.width))
 	return b.String()
+}
+
+// refreshReview redraws the page when the review of id changed, or, with an
+// empty id, the summary to move the spinner of a running review.
+func (m *detailModel) refreshReview(id string) {
+	r := m.reviews.byID[m.id]
+	if m.change == nil || r == nil {
+		return
+	}
+	if id == m.id || id == "" && m.page == pageSummary && r.state == reviewRunning {
+		m.refreshContent()
+	}
 }

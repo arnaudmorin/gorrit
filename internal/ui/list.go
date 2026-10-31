@@ -102,6 +102,7 @@ type listModel struct {
 	query       string
 	changes     []gerrit.ChangeInfo
 	chains      map[int]chainEntry // by change number
+	reviews     *reviewStore
 	cursor      int
 	offset      int
 	loading     bool
@@ -126,7 +127,7 @@ func newList(client *gerrit.Client, filters []config.Filter) listModel {
 			filters = config.DefaultFilters
 		}
 	}
-	m := listModel{client: client, filters: filters, loading: true, search: ti}
+	m := listModel{client: client, filters: filters, loading: true, search: ti, reviews: defaultReviewStore()}
 	m.applyTab(0)
 	return m
 }
@@ -322,6 +323,11 @@ func (m listModel) updateKey(msg tea.KeyMsg) (listModel, tea.Cmd) {
 			id := gerrit.ChangeID(c.Project, c.Number)
 			return m, func() tea.Msg { return openDiffMsg{id: id} }
 		}
+	case "a":
+		if c := m.selected(); c != nil {
+			id := gerrit.ChangeID(c.Project, c.Number)
+			return m, func() tea.Msg { return reviewRequestMsg{id: id} }
+		}
 	case "*":
 		if c := m.selected(); c != nil && m.client.Authenticated() {
 			return m, toggleStar(m.client, gerrit.ChangeID(c.Project, c.Number), !c.Starred)
@@ -433,7 +439,7 @@ func (m listModel) View() string {
 		b.WriteString(bar(styleBar.Render(" ")+m.search.View(), styleBarMuted.Render("tab completes "), m.width))
 	} else {
 		b.WriteString(hints(m.width,
-			keyHint{"j/k", "move"}, keyHint{"enter", "open"}, keyHint{"tab/1-9", "tabs"}, keyHint{"s", "status"}, keyHint{"d", "external diff"},
+			keyHint{"j/k", "move"}, keyHint{"enter", "open"}, keyHint{"tab/1-9", "tabs"}, keyHint{"s", "status"}, keyHint{"d", "external diff"}, m.reviewHint(),
 			keyHint{"*", "star"}, keyHint{"o", "browser"}, keyHint{"/", "search"}, keyHint{"r", "refresh"}, keyHint{"esc", "clear search"}, keyHint{"q", "quit"}))
 	}
 	return b.String()
@@ -512,6 +518,9 @@ func (m listModel) renderRows() ([]string, int) {
 		}
 		number := st(styleMuted).Render(padLeft(fmt.Sprint(c.Number), wNum))
 		prefix := ""
+		if tag := m.reviews.listTag(gerrit.ChangeID(c.Project, c.Number), c.CurrentRevisionNumber, st); tag != "" {
+			prefix += tag + st(styleMuted).Render(" · ")
+		}
 		if pos := m.chains[c.Number].pos; pos.size > 1 {
 			prefix += st(pos.style()).Render(pos.tag()) + st(styleMuted).Render(" · ")
 		}
@@ -561,4 +570,8 @@ func (m listModel) renderRows() ([]string, int) {
 		lines = append(lines, styleMuted.Render("  … more changes match this query, move down past the last row to load them"))
 	}
 	return lines, cursorLine
+}
+
+func (m listModel) reviewHint() keyHint {
+	return keyHint{"a", m.reviews.name + " review"}
 }

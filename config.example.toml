@@ -15,6 +15,13 @@ command = "git diff --no-index --no-prefix {old} {new}"
 # command = "hunk patch --agent-context {notes} {patch}"
 # command = "delta --side-by-side"
 
+# AI review for the `a` key, run through `sh -c` in the background in a
+# temporary directory, with the same placeholders as [diff]. What it prints
+# is the review; name labels it. Defaults to claude with the patch on stdin.
+[review]
+name = "claude"
+command = "claude -p \"Review this Gerrit change, its patch is on stdin. Start with a short summary of the change and whether it deserves a +1, ending with a line Verdict: +1 or Verdict: -1. Then give each finding as its own paragraph starting with path:line: where line is in the new version of the file, most important first. Be concise and answer in plain text.\""
+
 # Where "Closes-Bug: #123" footers link to; {id} is replaced.
 [bugs]
 url = "https://bugs.launchpad.net/bugs/{id}"
