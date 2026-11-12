@@ -242,6 +242,7 @@ func (m listModel) update(msg tea.Msg) (listModel, tea.Cmd) {
 		if msg.err == nil {
 			m.changes = msg.changes
 			m.clampCursor()
+			m.threadChains()
 			return m, loadChains(m.client, m.changes, m.chains)
 		}
 		return m, nil
@@ -258,6 +259,7 @@ func (m listModel) update(msg tea.Msg) (listModel, tea.Cmd) {
 			m.changes[n-1].MoreChanges = false
 		}
 		m.changes = append(m.changes, msg.changes...)
+		m.threadChains()
 		return m, loadChains(m.client, msg.changes, m.chains)
 	case chainsLoadedMsg:
 		if m.chains == nil {
@@ -266,6 +268,7 @@ func (m listModel) update(msg tea.Msg) (listModel, tea.Cmd) {
 		for n, e := range msg.entries {
 			m.chains[n] = e
 		}
+		m.threadChains()
 		return m, nil
 	case starDoneMsg:
 		if msg.err != nil {

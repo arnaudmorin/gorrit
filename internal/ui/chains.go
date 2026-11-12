@@ -1,8 +1,10 @@
 package ui
 
 import (
+	"cmp"
 	"context"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 
@@ -91,4 +93,48 @@ func loadChains(client *gerrit.Client, changes []gerrit.ChangeInfo, known map[in
 		wg.Wait()
 		return chainsLoadedMsg{entries: out}
 	}
+}
+
+// threadChains groups the members of a chain together, top first, and orders
+// the groups by their latest update. The cursor stays on the same change.
+func (m *listModel) threadChains() {
+	if len(m.changes) == 0 {
+		return
+	}
+	more := m.hasMore()
+	selected := m.changes[m.cursor].Number
+	group := func(c gerrit.ChangeInfo) int {
+		if p := m.chains[c.Number].pos; p.size > 1 {
+			return p.base
+		}
+		return -c.Number
+	}
+	latest := map[int]time.Time{}
+	first := map[int]int{}
+	for i, c := range m.changes {
+		g := group(c)
+		if c.Updated.After(latest[g]) {
+			latest[g] = c.Updated.Time
+		}
+		if _, ok := first[g]; !ok {
+			first[g] = i
+		}
+	}
+	slices.SortStableFunc(m.changes, func(a, b gerrit.ChangeInfo) int {
+		ga, gb := group(a), group(b)
+		if ga != gb {
+			if c := latest[gb].Compare(latest[ga]); c != 0 {
+				return c
+			}
+			return cmp.Compare(first[ga], first[gb])
+		}
+		return cmp.Compare(m.chains[b.Number].pos.index, m.chains[a.Number].pos.index)
+	})
+	for i := range m.changes {
+		m.changes[i].MoreChanges = false
+		if m.changes[i].Number == selected {
+			m.cursor = i
+		}
+	}
+	m.changes[len(m.changes)-1].MoreChanges = more
 }

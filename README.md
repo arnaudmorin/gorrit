@@ -43,7 +43,8 @@ to load more.
 
 Changes in a relation chain show their place in it before the subject, `1/3`
 being the bottom of a chain of three, coloured per chain so its members stand
-out.
+out. Members of a chain are listed together, top first, and the chain sits
+where its most recently updated member would.
 
 | Key | Action |
 | --- | --- |

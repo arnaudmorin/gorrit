@@ -3,6 +3,7 @@ package ui
 import (
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -23,9 +24,9 @@ func TestChainsInList(t *testing.T) {
 	defer srv.Close()
 	stamp := gerrit.Timestamp{Time: time.Unix(1000, 0)}
 	changes := []gerrit.ChangeInfo{
+		{Project: "p", Number: 20, Subject: "alone", Updated: gerrit.Timestamp{Time: time.Unix(2000, 0)}},
 		{Project: "p", Number: 12, Subject: "top", Updated: stamp},
-		{Project: "p", Number: 20, Subject: "alone", Updated: stamp},
-		{Project: "p", Number: 10, Subject: "bottom", Updated: stamp},
+		{Project: "p", Number: 10, Subject: "bottom", Updated: gerrit.Timestamp{Time: time.Unix(3000, 0)}},
 	}
 	m := newList(gerrit.New(srv.URL, "", ""), config.AnonymousFilters)
 	m.width, m.height = 200, 10
@@ -34,6 +35,16 @@ func TestChainsInList(t *testing.T) {
 		t.Fatal("no chain lookup")
 	}
 	m, _ = m.Update(cmd())
+	var order []int
+	for _, c := range m.changes {
+		order = append(order, c.Number)
+	}
+	if !slices.Equal(order, []int{12, 10, 20}) {
+		t.Fatalf("order %v", order)
+	}
+	if m.selected().Number != 20 {
+		t.Fatalf("cursor moved to %d", m.selected().Number)
+	}
 	want := map[int]chainPos{12: {base: 9, index: 4, size: 4}, 10: {base: 9, index: 2, size: 4}, 20: {}}
 	for n, p := range want {
 		if got := m.chains[n].pos; got != p {
